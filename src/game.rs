@@ -7,7 +7,7 @@ pub fn hello_world() {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
-enum Mark {
+pub enum Mark {
     X,
     O,
 }
@@ -21,23 +21,23 @@ impl fmt::Display for Mark {
     }
 }
 
-struct Board {
+pub struct Board {
     cells: [Option<Mark>; 9],
 }
 
 impl Board {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Board { cells: [None; 9] }
     }
 
-    fn get(&self, row: usize, col: usize) -> Option<Mark> {
+    pub fn get(&self, row: usize, col: usize) -> Option<Mark> {
         if row > 3 || col > 3 {
             panic!("Tried to access board position ({row}, {col}) which is out of bounds");
         }
         self.cells[row * 3 + col]
     }
 
-    fn set(&mut self, row: usize, col: usize, mark: Option<Mark>) {
+    pub fn set(&mut self, row: usize, col: usize, mark: Option<Mark>) {
         if row > 3 || col > 3 {
             panic!("Tried to access board position ({row}, {col}) which is out of bounds");
         }
@@ -92,12 +92,62 @@ impl Board {
     fn check_diag_sinister(&self) -> Option<Mark> {
         let mark_0 = self.get(0, 2)?;
         for i in 1..3 {
-            let mark_i = self.get(i, 2-i)?;
+            let mark_i = self.get(i, 2 - i)?;
             if mark_i != mark_0 {
                 return None;
             }
         }
         Some(mark_0)
+    }
+
+    pub fn check_all(&self) -> Option<Mark> {
+        if let Some(mark) = self.check_diag_dexter() {
+            return Some(mark);
+        }
+        if let Some(mark) = self.check_diag_sinister() {
+            return Some(mark);
+        }
+        for i in 0..3 {
+            if let Some(mark) = self.check_row(i) {
+                return Some(mark);
+            }
+            if let Some(mark) = self.check_col(i) {
+                return Some(mark);
+            }
+        }
+
+        None
+    }
+
+    pub fn check_complete(&self) -> bool {
+        for i in 0..9 {
+            if self.cells[i].is_none() {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+impl fmt::Display for Board {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for row in 0..3 {
+            for col in 0..3 {
+                let index = row * 3 + col;
+                match self.cells[index] {
+                    Some(mark) => write!(f, " {} ", mark)?,
+                    None => write!(f, " {} ", index)?,
+                }
+                if col < 2 {
+                    write!(f, "|")?;
+                }
+            }
+            if row < 2 {
+                writeln!(f)?;
+                writeln!(f, "-----------")?;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -166,5 +216,42 @@ mod tests {
         board.set(1, 1, Some(Mark::O));
         assert_eq!(board.check_diag_dexter(), None);
         assert_eq!(board.check_diag_sinister(), Some(Mark::O));
+    }
+
+    #[test]
+    fn test_check_all() {
+        let mut board = Board::new();
+        assert_eq!(board.check_diag_dexter(), None);
+        assert_eq!(board.check_diag_sinister(), None);
+
+        board.set_row(0, [Some(Mark::X), Some(Mark::O), Some(Mark::O)]);
+        board.set_row(1, [Some(Mark::X), None, Some(Mark::X)]);
+        board.set_row(2, [None, Some(Mark::O), None]);
+        assert_eq!(board.check_all(), None);
+
+        board.set(1, 1, Some(Mark::X));
+        assert_eq!(board.check_all(), Some(Mark::X));
+
+        board.set(1, 1, Some(Mark::O));
+        assert_eq!(board.check_all(), Some(Mark::O));
+
+        board.set(0, 1, Some(Mark::X));
+        assert_eq!(board.check_all(), None);
+        board.set(2, 0, Some(Mark::O));
+        assert_eq!(board.check_all(), Some(Mark::O));
+    }
+
+    #[test]
+    fn test_check_complete() {
+        let mut board = Board::new();
+        assert_eq!(board.check_complete(), false);
+
+        board.set_row(0, [Some(Mark::X), Some(Mark::O), Some(Mark::O)]);
+        board.set_row(1, [Some(Mark::X), None, Some(Mark::X)]);
+        board.set_row(2, [Some(Mark::O), Some(Mark::O), Some(Mark::X)]);
+        assert_eq!(board.check_complete(), false);
+
+        board.set(1, 1, Some(Mark::X));
+        assert_eq!(board.check_complete(), true);
     }
 }
