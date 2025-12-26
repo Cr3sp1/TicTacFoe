@@ -1,11 +1,6 @@
 use std::fmt;
 
-pub fn hello_world() {
-    println!("Available marks:");
-    println!("X: {}", Mark::X);
-    println!("O: {}", Mark::O);
-}
-
+/// Represents a player's mark (X or O) on the tic-tac-toe board.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Mark {
     X,
@@ -21,15 +16,28 @@ impl fmt::Display for Mark {
     }
 }
 
+/// A 3x3 tic-tac-toe board.
+///
+/// The board is represented as a flat array of 9 cells, where each cell
+/// can contain either a mark (X or O) or be empty (None).
 pub struct Board {
     cells: [Option<Mark>; 9],
 }
 
 impl Board {
+    /// Creates a new empty board with all cells set to None.
     pub fn new() -> Self {
         Board { cells: [None; 9] }
     }
 
+    /// Gets the mark at the specified position.
+    ///
+    /// # Arguments
+    /// * `row` - Row index (0-2)
+    /// * `col` - Column index (0-2)
+    ///
+    /// # Panics
+    /// Panics if row or col is greater than 3.
     pub fn get(&self, row: usize, col: usize) -> Option<Mark> {
         if row > 3 || col > 3 {
             panic!("Tried to access board position ({row}, {col}) which is out of bounds");
@@ -37,6 +45,15 @@ impl Board {
         self.cells[row * 3 + col]
     }
 
+    /// Sets the mark at the specified position.
+    ///
+    /// # Arguments
+    /// * `row` - Row index (0-2)
+    /// * `col` - Column index (0-2)
+    /// * `mark` - The mark to place (Some(Mark::X), Some(Mark::O), or None)
+    ///
+    /// # Panics
+    /// Panics if row or col is greater than 3.
     pub fn set(&mut self, row: usize, col: usize, mark: Option<Mark>) {
         if row > 3 || col > 3 {
             panic!("Tried to access board position ({row}, {col}) which is out of bounds");
@@ -44,18 +61,10 @@ impl Board {
         self.cells[row * 3 + col] = mark;
     }
 
-    fn set_row(&mut self, row: usize, marks: [Option<Mark>; 3]) {
-        for col in 0..3 {
-            self.set(row, col, marks[col]);
-        }
-    }
-
-    fn set_col(&mut self, col: usize, marks: [Option<Mark>; 3]) {
-        for row in 0..3 {
-            self.set(row, col, marks[row]);
-        }
-    }
-
+    /// Checks if the specified row has three matching marks.
+    ///
+    /// Returns the winning mark if all three cells in the row match,
+    /// or None if they don't match or any cell is empty.
     fn check_row(&self, row: usize) -> Option<Mark> {
         let mark_0 = self.get(row, 0)?;
         for i in 1..3 {
@@ -67,6 +76,10 @@ impl Board {
         Some(mark_0)
     }
 
+    /// Checks if the specified column has three matching marks.
+    ///
+    /// Returns the winning mark if all three cells in the column match,
+    /// or None if they don't match or any cell is empty.
     fn check_col(&self, col: usize) -> Option<Mark> {
         let mark_0 = self.get(0, col)?;
         for i in 1..3 {
@@ -78,6 +91,9 @@ impl Board {
         Some(mark_0)
     }
 
+    /// Checks the top-left to bottom-right diagonal for three matching marks.
+    ///
+    /// Returns the winning mark if all three cells match, or None otherwise.
     fn check_diag_dexter(&self) -> Option<Mark> {
         let mark_0 = self.get(0, 0)?;
         for i in 1..3 {
@@ -89,6 +105,9 @@ impl Board {
         Some(mark_0)
     }
 
+    /// Checks the top-right to bottom-left diagonal for three matching marks.
+    ///
+    /// Returns the winning mark if all three cells match, or None otherwise.
     fn check_diag_sinister(&self) -> Option<Mark> {
         let mark_0 = self.get(0, 2)?;
         for i in 1..3 {
@@ -100,6 +119,10 @@ impl Board {
         Some(mark_0)
     }
 
+    /// Checks all possible winning conditions (rows, columns, and diagonals).
+    ///
+    /// Returns the winning mark if any winning condition is met, or None if
+    /// there is no winner yet.
     pub fn check_all(&self) -> Option<Mark> {
         if let Some(mark) = self.check_diag_dexter() {
             return Some(mark);
@@ -119,6 +142,9 @@ impl Board {
         None
     }
 
+    /// Checks if all cells on the board are filled.
+    ///
+    /// Returns true if every cell contains a mark, false otherwise.
     pub fn check_complete(&self) -> bool {
         for i in 0..9 {
             if self.cells[i].is_none() {
@@ -154,6 +180,22 @@ impl fmt::Display for Board {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    impl Board {
+        /// Test helper: Sets an entire row with the provided marks.
+        fn set_row(&mut self, row: usize, marks: [Option<Mark>; 3]) {
+            for col in 0..3 {
+                self.set(row, col, marks[col]);
+            }
+        }
+
+        /// Test helper: Sets an entire column with the provided marks.
+        fn set_col(&mut self, col: usize, marks: [Option<Mark>; 3]) {
+            for row in 0..3 {
+                self.set(row, col, marks[row]);
+            }
+        }
+    }
 
     #[test]
     fn test_check_row() {
