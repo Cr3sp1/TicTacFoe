@@ -1,6 +1,5 @@
 use crossterm::event::{self, Event, KeyCode};
 use ratatui::Terminal;
-use std::io;
 use tic_tac_foe::app::App;
 use tic_tac_foe::ui;
 
@@ -23,7 +22,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn run_app<B: ratatui::backend::Backend>(
     terminal: &mut Terminal<B>,
     app: &mut App,
-) -> io::Result<()> {
+) -> Result<(), Box<dyn std::error::Error>>
+where
+    B::Error: 'static,
+{
     loop {
         terminal.draw(|f| ui::render(f, app))?;
 

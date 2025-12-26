@@ -1,3 +1,5 @@
+use crate::ai;
+use crate::ai::SimpleAi;
 use crate::game::{Board, Mark};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -14,6 +16,7 @@ pub struct App {
     pub selected_row: usize,
     pub selected_col: usize,
     pub should_quit: bool,
+    pub ai: Option<SimpleAi>,
 }
 
 impl App {
@@ -25,6 +28,7 @@ impl App {
             selected_row: 0,
             selected_col: 0,
             should_quit: false,
+            ai: Some(SimpleAi::new(Mark::O)),
         }
     }
 
@@ -152,26 +156,13 @@ impl App {
         self.selected_row = (self.selected_row + 1) % 3;
     }
 
-    fn move_selection_next(&mut self) {
+    fn move_selection_next_available(&mut self) {
         self.selected_col += 1;
         if self.selected_col >= 3 {
             self.selected_col = 0;
             self.selected_row += 1;
             if self.selected_row >= 3 {
                 self.selected_row = 0;
-            }
-        }
-    }
-
-    fn move_selection_prev(&mut self) {
-        if self.selected_col > 0 {
-            self.selected_col -= 1;
-        } else {
-            self.selected_col = 2;
-            if self.selected_row > 0 {
-                self.selected_row -= 1;
-            } else {
-                self.selected_row = 2;
             }
         }
     }
@@ -215,6 +206,30 @@ impl App {
             Mark::O => Mark::X,
         };
 
+        // let AI play
+        if let Some(ai) = &self.ai {
+            let (ai_row, ai_col) = ai.choose_move(self.board.clone());
+            self.board.set(ai_row, ai_col, Some(ai.ai_mark));
+        }
+
+        // Check for win
+        if let Some(winner) = self.board.check_all() {
+            self.state = GameState::Won(winner);
+            return;
+        }
+
+        // Check for draw
+        if self.board.check_complete() {
+            self.state = GameState::Draw;
+            return;
+        }
+
+        // Switch player
+        self.active_player = match self.active_player {
+            Mark::X => Mark::O,
+            Mark::O => Mark::X,
+        };
+
         // Reset position
         (self.selected_row, self.selected_col) = (0, 0);
         while self
@@ -222,7 +237,7 @@ impl App {
             .get(self.selected_row, self.selected_col)
             .is_some()
         {
-            self.move_selection_next();
+            self.move_selection_next_available();
         }
     }
 
