@@ -1,8 +1,6 @@
-use std::io;
-use crossterm::{
-    event::{self, Event, KeyCode},
-};
+use crossterm::event::{self, Event, KeyCode};
 use ratatui::Terminal;
+use std::io;
 use tic_tac_foe::app::App;
 use tic_tac_foe::ui;
 

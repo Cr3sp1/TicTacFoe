@@ -1,9 +1,9 @@
 use ratatui::{
+    Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
-    Frame,
 };
 
 use crate::app::{App, GameState};
@@ -27,7 +27,11 @@ pub fn render(f: &mut Frame, app: &App) {
 
 fn render_title(f: &mut Frame, area: Rect) {
     let title = Paragraph::new("TIC TAC TOE")
-        .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+        .style(
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )
         .alignment(Alignment::Center)
         .block(Block::default().borders(Borders::ALL));
     f.render_widget(title, area);
@@ -41,28 +45,28 @@ fn render_board(f: &mut Frame, area: Rect, app: &App) {
     // Add current player or game result
     match app.state {
         GameState::Playing => {
-            lines.push(Line::from(vec![
-                Span::styled(
-                    format!("Current Player: {}", app.active_player),
-                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
-                ),
-            ]));
+            lines.push(Line::from(vec![Span::styled(
+                format!("Current Player: {}", app.active_player),
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            )]));
         }
         GameState::Won(winner) => {
-            lines.push(Line::from(vec![
-                Span::styled(
-                    format!("Player {} WINS!", winner),
-                    Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
-                ),
-            ]));
+            lines.push(Line::from(vec![Span::styled(
+                format!("Player {} WINS!", winner),
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            )]));
         }
         GameState::Draw => {
-            lines.push(Line::from(vec![
-                Span::styled(
-                    "DRAW!",
-                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
-                ),
-            ]));
+            lines.push(Line::from(vec![Span::styled(
+                "DRAW!",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            )]));
         }
     }
     lines.push(Line::from(""));
@@ -74,10 +78,13 @@ fn render_board(f: &mut Frame, area: Rect, app: &App) {
             let mut cell_content = match app.board.get(row, col) {
                 Some(Mark::X) => "X",
                 Some(Mark::O) => "O",
-                None =>" "
+                None => " ",
             };
 
-            let style = if row == app.selected_row && col == app.selected_col && app.state == GameState::Playing {
+            let style = if row == app.selected_row
+                && col == app.selected_col
+                && app.state == GameState::Playing
+            {
                 cell_content = match app.active_player {
                     Mark::X => "X",
                     Mark::O => "O",
@@ -88,7 +95,9 @@ fn render_board(f: &mut Frame, area: Rect, app: &App) {
             } else {
                 match app.board.get(row, col) {
                     Some(Mark::X) => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-                    Some(Mark::O) => Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD),
+                    Some(Mark::O) => Style::default()
+                        .fg(Color::Blue)
+                        .add_modifier(Modifier::BOLD),
                     None => Style::default().fg(Color::DarkGray),
                 }
             };

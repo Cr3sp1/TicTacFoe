@@ -36,8 +36,12 @@ impl App {
             let original_row = self.selected_row;
 
             // look for free positions in the current column
-            for _ in 0..3{
-                if self.board.get(self.selected_row, self.selected_col).is_none() {
+            for _ in 0..3 {
+                if self
+                    .board
+                    .get(self.selected_row, self.selected_col)
+                    .is_none()
+                {
                     return;
                 }
                 match original_row {
@@ -45,7 +49,6 @@ impl App {
                     2 => self.move_selection_up(),
                     _ => self.move_selection_up(),
                 }
-
             }
         }
     }
@@ -58,8 +61,12 @@ impl App {
             let original_row = self.selected_row;
 
             // look for free positions in the current column
-            for _ in 0..3{
-                if self.board.get(self.selected_row, self.selected_col).is_none() {
+            for _ in 0..3 {
+                if self
+                    .board
+                    .get(self.selected_row, self.selected_col)
+                    .is_none()
+                {
                     return;
                 }
                 match original_row {
@@ -67,7 +74,6 @@ impl App {
                     2 => self.move_selection_up(),
                     _ => self.move_selection_down(),
                 }
-
             }
         }
     }
@@ -80,8 +86,12 @@ impl App {
             let original_col = self.selected_col;
 
             // look for free positions in the current row
-            for _ in 0..3{
-                if self.board.get(self.selected_row, self.selected_col).is_none() {
+            for _ in 0..3 {
+                if self
+                    .board
+                    .get(self.selected_row, self.selected_col)
+                    .is_none()
+                {
                     return;
                 }
                 match original_col {
@@ -89,7 +99,6 @@ impl App {
                     2 => self.move_selection_left(),
                     _ => self.move_selection_left(),
                 }
-
             }
         }
     }
@@ -102,8 +111,12 @@ impl App {
             let original_col = self.selected_col;
 
             // look for free positions in the current row
-            for _ in 0..3{
-                if self.board.get(self.selected_row, self.selected_col).is_none() {
+            for _ in 0..3 {
+                if self
+                    .board
+                    .get(self.selected_row, self.selected_col)
+                    .is_none()
+                {
                     return;
                 }
                 match original_col {
@@ -111,7 +124,6 @@ impl App {
                     2 => self.move_selection_left(),
                     _ => self.move_selection_right(),
                 }
-
             }
         }
     }
@@ -170,12 +182,20 @@ impl App {
         }
 
         // Check if cell is empty
-        if self.board.get(self.selected_row, self.selected_col).is_some() {
+        if self
+            .board
+            .get(self.selected_row, self.selected_col)
+            .is_some()
+        {
             return;
         }
 
         // Make the move
-        self.board.set(self.selected_row, self.selected_col, Some(self.active_player));
+        self.board.set(
+            self.selected_row,
+            self.selected_col,
+            Some(self.active_player),
+        );
 
         // Check for win
         if let Some(winner) = self.board.check_all() {
@@ -197,24 +217,14 @@ impl App {
 
         // Reset position
         (self.selected_row, self.selected_col) = (0, 0);
-        while self.board.get(self.selected_row, self.selected_col).is_some() {
-             self.move_selection_next();
+        while self
+            .board
+            .get(self.selected_row, self.selected_col)
+            .is_some()
+        {
+            self.move_selection_next();
         }
     }
-
-
-    // fn prev_position(mut row: usize, mut col: usize) -> (usize, usize) {
-    //     if col > 0 {
-    //         col -= 1;
-    //     } else{
-    //         col = 0;
-    //         row -= 1;
-    //         if row >= 3 {
-    //             row = 0;
-    //         }
-    //     }
-    //     (row, col)
-    // }
 
     pub fn reset(&mut self) {
         self.board = Board::new();

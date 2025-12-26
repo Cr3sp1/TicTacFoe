@@ -20,6 +20,7 @@ impl fmt::Display for Mark {
 ///
 /// The board is represented as a flat array of 9 cells, where each cell
 /// can contain either a mark (X or O) or be empty (None).
+#[derive(Copy, Clone)]
 pub struct Board {
     cells: [Option<Mark>; 9],
 }
