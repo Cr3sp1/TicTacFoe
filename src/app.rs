@@ -1,6 +1,10 @@
-use crate::ai;
 use crate::ai::SimpleAi;
 use crate::game::{Board, Mark};
+
+pub enum GameMode {
+    PvE,
+    LocalPvP,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum GameState {
@@ -9,10 +13,17 @@ pub enum GameState {
     Draw,
 }
 
+pub enum CurrentScreen {
+    SelectingGameMode,
+    Playing,
+}
+
 pub struct App {
+    pub current_screen: CurrentScreen,
     pub board: Board,
     pub active_player: Mark,
     pub state: GameState,
+    pub mode: GameMode,
     pub selected_row: usize,
     pub selected_col: usize,
     pub should_quit: bool,
@@ -22,14 +33,28 @@ pub struct App {
 impl App {
     pub fn new() -> Self {
         Self {
+            current_screen: CurrentScreen::SelectingGameMode,
             board: Board::new(),
             active_player: Mark::X,
             state: GameState::Playing,
+            mode: GameMode::LocalPvP,
             selected_row: 0,
             selected_col: 0,
             should_quit: false,
-            ai: Some(SimpleAi::new(Mark::O)),
+            ai: None,
         }
+    }
+
+    pub fn start_local_pve(&mut self) {
+        self.ai = Some(SimpleAi::new(Mark::O));
+        self.mode = GameMode::PvE;
+        self.current_screen = CurrentScreen::Playing;
+    }
+
+    pub fn start_local_pvp(&mut self) {
+        self.ai = None;
+        self.mode = GameMode::LocalPvP;
+        self.current_screen = CurrentScreen::Playing;
     }
 
     pub fn input_left(&mut self) {
@@ -210,25 +235,25 @@ impl App {
         if let Some(ai) = &self.ai {
             let (ai_row, ai_col) = ai.choose_move(self.board.clone());
             self.board.set(ai_row, ai_col, Some(ai.ai_mark));
-        }
 
-        // Check for win
-        if let Some(winner) = self.board.check_all() {
-            self.state = GameState::Won(winner);
-            return;
-        }
+            // Check for win
+            if let Some(winner) = self.board.check_all() {
+                self.state = GameState::Won(winner);
+                return;
+            }
 
-        // Check for draw
-        if self.board.check_complete() {
-            self.state = GameState::Draw;
-            return;
-        }
+            // Check for draw
+            if self.board.check_complete() {
+                self.state = GameState::Draw;
+                return;
+            }
 
-        // Switch player
-        self.active_player = match self.active_player {
-            Mark::X => Mark::O,
-            Mark::O => Mark::X,
-        };
+            // Switch player
+            self.active_player = match self.active_player {
+                Mark::X => Mark::O,
+                Mark::O => Mark::X,
+            };
+        }
 
         // Reset position
         (self.selected_row, self.selected_col) = (0, 0);
@@ -241,7 +266,17 @@ impl App {
         }
     }
 
-    pub fn reset(&mut self) {
+    pub fn reset_app(&mut self) {
+        self.current_screen = CurrentScreen::SelectingGameMode;
+        self.ai = None;
+        self.board = Board::new();
+        self.active_player = Mark::X;
+        self.state = GameState::Playing;
+        self.selected_row = 0;
+        self.selected_col = 0;
+    }
+
+    pub fn reset_game(&mut self) {
         self.board = Board::new();
         self.active_player = Mark::X;
         self.state = GameState::Playing;
