@@ -5,24 +5,27 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
 };
-
 use crate::app::{App, CurrentScreen};
 use crate::game::Mark;
-use crate::scenes::{GamePlay, GameState, MainMenu};
+use crate::scenes::{GameMode, GamePlay, GameState, MainMenu};
 
 pub fn render(f: &mut Frame, app: &App) {
     match &app.current_screen {
-        CurrentScreen::MainMenu(menu) => render_game_mode_selection(f, menu),
+        CurrentScreen::MainMenu(menu) => render_main_menu(f, menu),
         CurrentScreen::Playing(game) => render_game(f, game),
     }
 }
 
 fn render_game(f: &mut Frame, game: &GamePlay) {
+    if render_size_warning(f, 10, 10){
+        return;
+    }
+
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .margin(2)
+        .margin(0)
         .constraints([
-            Constraint::Length(3),
+            Constraint::Max(3),
             Constraint::Min(11),
             Constraint::Length(3),
         ])
@@ -33,10 +36,14 @@ fn render_game(f: &mut Frame, game: &GamePlay) {
     render_game_instructions(f, chunks[2], game);
 }
 
-fn render_game_mode_selection(f: &mut Frame, menu: &MainMenu) {
+fn render_main_menu(f: &mut Frame, menu: &MainMenu) {
+    if render_size_warning(f, 10, 10){
+        return;
+    }
+
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .margin(2)
+        .margin(0)
         .constraints([
             Constraint::Length(3),
             Constraint::Min(10),
@@ -45,15 +52,14 @@ fn render_game_mode_selection(f: &mut Frame, menu: &MainMenu) {
         .split(f.area());
 
     render_title(f, chunks[0]);
-    render_mode_options(f, chunks[1], menu);
+    render_menu_options(f, chunks[1], menu);
     render_menu_instructions(f, chunks[2]);
 }
 
-fn render_mode_options(f: &mut Frame, area: Rect, menu: &MainMenu) {
-    let options_area = center_rect(area, 50, 10);
+fn render_menu_options(f: &mut Frame, area: Rect, menu: &MainMenu) {
+    let options_area = center_rect(area, 30, 10);
 
     let mut lines = vec![
-        Line::from(""),
         Line::from(vec![Span::styled(
             "Select Game Mode:",
             Style::default()
@@ -82,7 +88,7 @@ fn render_mode_options(f: &mut Frame, area: Rect, menu: &MainMenu) {
 
     let paragraph = Paragraph::new(lines)
         .alignment(Alignment::Center)
-        .block(Block::default().borders(Borders::ALL).title("Game Mode"));
+        .block(Block::default().borders(Borders::ALL));
 
     f.render_widget(paragraph, options_area);
 }
@@ -90,16 +96,12 @@ fn render_mode_options(f: &mut Frame, area: Rect, menu: &MainMenu) {
 fn render_menu_instructions(f: &mut Frame, area: Rect) {
     let instructions = "Arrow Keys: Navigate | Enter: Select | Q: Quit";
 
-    let paragraph = Paragraph::new(instructions)
-        .style(Style::default().fg(Color::Gray))
-        .alignment(Alignment::Center)
-        .block(Block::default().borders(Borders::ALL));
-
-    f.render_widget(paragraph, area);
+    render_instructions(f, area, instructions);
 }
 
 fn render_title(f: &mut Frame, area: Rect) {
-    let title = Paragraph::new("TIC TAC TOE")
+    let title_area = center_rect(area, 100, 3);
+    let title = Paragraph::new("TIC TAC FOE")
         .style(
             Style::default()
                 .fg(Color::Cyan)
@@ -107,7 +109,7 @@ fn render_title(f: &mut Frame, area: Rect) {
         )
         .alignment(Alignment::Center)
         .block(Block::default().borders(Borders::ALL));
-    f.render_widget(title, area);
+    f.render_widget(title, title_area);
 }
 
 fn render_board(f: &mut Frame, area: Rect, game: &GamePlay) {
@@ -190,14 +192,14 @@ fn render_board(f: &mut Frame, area: Rect, game: &GamePlay) {
 
     let board = Paragraph::new(lines)
         .alignment(Alignment::Center)
-        .block(Block::default().borders(Borders::ALL).title("Board"));
+        .block(Block::default().borders(Borders::ALL));
 
     f.render_widget(board, board_area);
 }
 
 fn render_game_instructions(f: &mut Frame, area: Rect, game: &GamePlay) {
     let instructions = if game.state == GameState::Playing {
-        if game.turn == 0 {
+        if game.turn == 0 && game.mode == GameMode::PvE {
             "S: Play Second | Arrow Keys: Move | Enter: Place Mark | R: Reset Game | M: Main Menu | Q: Quit"
         } else {
             "Arrow Keys: Move | Enter: Place Mark | R: Reset Game | M: Main Menu | Q: Quit"
@@ -206,10 +208,17 @@ fn render_game_instructions(f: &mut Frame, area: Rect, game: &GamePlay) {
         "R: Reset Game | M: Main Menu | Q: Quit"
     };
 
+    render_instructions(f, area, instructions);
+}
+
+fn render_instructions(f: &mut Frame, area: Rect, instructions: &str) {
+    let width = instructions.chars().count() as u16 + 5;
+    let area = center_rect(area, width, 3);
+
     let paragraph = Paragraph::new(instructions)
         .style(Style::default().fg(Color::Gray))
         .alignment(Alignment::Center)
-        .block(Block::default().borders(Borders::ALL));
+        .block(Block::default().borders(Borders::ALL).title("Commands"));
 
     f.render_widget(paragraph, area);
 }
@@ -232,4 +241,30 @@ fn center_rect(area: Rect, width: u16, height: u16) -> Rect {
             Constraint::Length((area.width.saturating_sub(width)) / 2),
         ])
         .split(vertical[1])[1]
+}
+
+fn render_size_warning(f: &mut Frame, min_width: u16, min_height: u16) -> bool {
+    let size = f.area();
+    if size.width >= min_width && size.height >= min_height {
+        return false;
+    }
+
+    let warning = Paragraph::new(vec![
+        Line::from(vec![
+            Span::styled(
+                "Terminal Too Small!",
+                Style::default()
+                    .fg(Color::Red)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Line::from(format!("Minimum required: {}x{}", min_width, min_height)),
+        Line::from(format!("Current size: {}x{}", size.width, size.height)),
+        Line::from("Please resize your terminal"),
+    ])
+        .alignment(Alignment::Center)
+        .block(Block::default().borders(Borders::ALL).title("Warning"));
+
+    f.render_widget(warning, size);
+    true
 }
