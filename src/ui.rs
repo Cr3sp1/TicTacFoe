@@ -6,17 +6,18 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph},
 };
 
-use crate::app::{App, CurrentScreen, GameMode, GameState};
+use crate::app::{App, CurrentScreen};
 use crate::game::Mark;
+use crate::scenes::{GamePlay, GameState, MainMenu};
 
 pub fn render(f: &mut Frame, app: &App) {
-    match app.current_screen {
-        CurrentScreen::SelectingGameMode => render_game_mode_selection(f),
-        CurrentScreen::Playing => render_game(f, app),
+    match &app.current_screen {
+        CurrentScreen::MainMenu(menu) => render_game_mode_selection(f, menu),
+        CurrentScreen::Playing(game) => render_game(f, game),
     }
 }
 
-fn render_game(f: &mut Frame, app: &App) {
+fn render_game(f: &mut Frame, game: &GamePlay) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(2)
@@ -28,11 +29,11 @@ fn render_game(f: &mut Frame, app: &App) {
         .split(f.area());
 
     render_title(f, chunks[0]);
-    render_board(f, chunks[1], app);
-    render_instructions(f, chunks[2], app);
+    render_board(f, chunks[1], game);
+    render_game_instructions(f, chunks[2], game);
 }
 
-fn render_game_mode_selection(f: &mut Frame) {
+fn render_game_mode_selection(f: &mut Frame, menu: &MainMenu) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(2)
@@ -44,14 +45,14 @@ fn render_game_mode_selection(f: &mut Frame) {
         .split(f.area());
 
     render_title(f, chunks[0]);
-    render_mode_options(f, chunks[1]);
-    render_mode_instructions(f, chunks[2]);
+    render_mode_options(f, chunks[1], menu);
+    render_menu_instructions(f, chunks[2]);
 }
 
-fn render_mode_options(f: &mut Frame, area: Rect) {
+fn render_mode_options(f: &mut Frame, area: Rect, menu: &MainMenu) {
     let options_area = center_rect(area, 50, 10);
 
-    let lines = vec![
+    let mut lines = vec![
         Line::from(""),
         Line::from(vec![Span::styled(
             "Select Game Mode:",
@@ -60,26 +61,24 @@ fn render_mode_options(f: &mut Frame, area: Rect) {
                 .add_modifier(Modifier::BOLD),
         )]),
         Line::from(""),
-        Line::from(vec![
-            Span::styled(
-                "[A] ",
-                Style::default()
-                    .fg(Color::Green)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled("Play vs AI", Style::default().fg(Color::White)),
-        ]),
-        Line::from(""),
-        Line::from(vec![
-            Span::styled(
-                "[L] ",
-                Style::default()
-                    .fg(Color::Blue)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled("Local PvP", Style::default().fg(Color::White)),
-        ]),
     ];
+
+    for (i, option) in menu.options.iter().enumerate() {
+        let style = if i == menu.selected_option {
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::White)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::White)
+        };
+
+        lines.push(Line::from(vec![Span::styled(
+            format!("  {}  ", option),
+            style,
+        )]));
+        lines.push(Line::from(""));
+    }
 
     let paragraph = Paragraph::new(lines)
         .alignment(Alignment::Center)
@@ -88,8 +87,8 @@ fn render_mode_options(f: &mut Frame, area: Rect) {
     f.render_widget(paragraph, options_area);
 }
 
-fn render_mode_instructions(f: &mut Frame, area: Rect) {
-    let instructions = "A: AI Mode | L: Local PvP | Q: Quit";
+fn render_menu_instructions(f: &mut Frame, area: Rect) {
+    let instructions = "Arrow Keys: Navigate | Enter: Select | Q: Quit";
 
     let paragraph = Paragraph::new(instructions)
         .style(Style::default().fg(Color::Gray))
@@ -111,16 +110,16 @@ fn render_title(f: &mut Frame, area: Rect) {
     f.render_widget(title, area);
 }
 
-fn render_board(f: &mut Frame, area: Rect, app: &App) {
+fn render_board(f: &mut Frame, area: Rect, game: &GamePlay) {
     let board_area = center_rect(area, 40, 11);
 
     let mut lines = vec![];
 
     // Add current player or game result
-    match app.state {
+    match game.state {
         GameState::Playing => {
             lines.push(Line::from(vec![Span::styled(
-                format!("Current Player: {}", app.active_player),
+                format!("Current Player: {}", game.active_player),
                 Style::default()
                     .fg(Color::Yellow)
                     .add_modifier(Modifier::BOLD),
@@ -149,17 +148,17 @@ fn render_board(f: &mut Frame, area: Rect, app: &App) {
     for row in 0..3 {
         let mut row_spans = vec![];
         for col in 0..3 {
-            let mut cell_content = match app.board.get(row, col) {
+            let mut cell_content = match game.board.get(row, col) {
                 Some(Mark::X) => "X",
                 Some(Mark::O) => "O",
                 None => " ",
             };
 
-            let style = if row == app.selected_row
-                && col == app.selected_col
-                && app.state == GameState::Playing
+            let style = if row == game.selected_row
+                && col == game.selected_col
+                && game.state == GameState::Playing
             {
-                cell_content = match app.active_player {
+                cell_content = match game.active_player {
                     Mark::X => "X",
                     Mark::O => "O",
                 };
@@ -167,7 +166,7 @@ fn render_board(f: &mut Frame, area: Rect, app: &App) {
                     .fg(Color::Yellow)
                     .add_modifier(Modifier::BOLD)
             } else {
-                match app.board.get(row, col) {
+                match game.board.get(row, col) {
                     Some(Mark::X) => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
                     Some(Mark::O) => Style::default()
                         .fg(Color::Blue)
@@ -196,10 +195,10 @@ fn render_board(f: &mut Frame, area: Rect, app: &App) {
     f.render_widget(board, board_area);
 }
 
-fn render_instructions(f: &mut Frame, area: Rect, app: &App) {
-    let instructions = if app.state == GameState::Playing {
-        if app.turn == 0 && app.mode == GameMode::PvE {
-            "S: Play second | Arrow Keys: Move | Enter: Place Mark | R: Reset Game | M: Main Menu | Q: Quit"
+fn render_game_instructions(f: &mut Frame, area: Rect, game: &GamePlay) {
+    let instructions = if game.state == GameState::Playing {
+        if game.turn == 0 {
+            "S: Play Second | Arrow Keys: Move | Enter: Place Mark | R: Reset Game | M: Main Menu | Q: Quit"
         } else {
             "Arrow Keys: Move | Enter: Place Mark | R: Reset Game | M: Main Menu | Q: Quit"
         }
