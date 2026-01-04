@@ -58,6 +58,9 @@ where
                         KeyCode::Char('m') | KeyCode::Char('M') => {
                             app.reset_app();
                         }
+                        KeyCode::Char('s') | KeyCode::Char('S') => {
+                            app.play_second();
+                        }
                         KeyCode::Left | KeyCode::Char('h') => {
                             app.input_left();
                         }

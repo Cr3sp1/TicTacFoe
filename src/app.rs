@@ -1,6 +1,7 @@
 use crate::ai::SimpleAi;
 use crate::game::{Board, Mark};
 
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum GameMode {
     PvE,
     LocalPvP,
@@ -23,6 +24,7 @@ pub struct App {
     pub board: Board,
     pub active_player: Mark,
     pub state: GameState,
+    pub turn: u32,
     pub mode: GameMode,
     pub selected_row: usize,
     pub selected_col: usize,
@@ -37,6 +39,7 @@ impl App {
             board: Board::new(),
             active_player: Mark::X,
             state: GameState::Playing,
+            turn: 0,
             mode: GameMode::LocalPvP,
             selected_row: 0,
             selected_col: 0,
@@ -213,6 +216,8 @@ impl App {
             Some(self.active_player),
         );
 
+        self.turn += 1;
+
         // Check for win
         if let Some(winner) = self.board.check_all() {
             self.state = GameState::Won(winner);
@@ -231,7 +236,14 @@ impl App {
             Mark::O => Mark::X,
         };
 
-        // let AI play
+        if self.mode == GameMode::PvE {
+            self.ai_play();
+        }
+
+        self.reset_position();
+    }
+
+    fn ai_play(&mut self) {
         if let Some(ai) = &self.ai {
             let (ai_row, ai_col) = ai.choose_move(self.board.clone());
             self.board.set(ai_row, ai_col, Some(ai.ai_mark));
@@ -249,13 +261,21 @@ impl App {
             }
 
             // Switch player
-            self.active_player = match self.active_player {
+            self.active_player = match ai.ai_mark {
                 Mark::X => Mark::O,
                 Mark::O => Mark::X,
             };
-        }
 
-        // Reset position
+            self.turn += 1;
+
+            self.reset_position();
+        }
+    }
+
+    fn reset_position(&mut self) {
+        if self.state == GameState::Draw {
+            return;
+        }
         (self.selected_row, self.selected_col) = (0, 0);
         while self
             .board
@@ -272,6 +292,7 @@ impl App {
         self.board = Board::new();
         self.active_player = Mark::X;
         self.state = GameState::Playing;
+        self.turn = 0;
         self.selected_row = 0;
         self.selected_col = 0;
     }
@@ -280,8 +301,15 @@ impl App {
         self.board = Board::new();
         self.active_player = Mark::X;
         self.state = GameState::Playing;
+        self.turn = 0;
         self.selected_row = 0;
         self.selected_col = 0;
+    }
+
+    pub fn play_second(&mut self) {
+        if self.state == GameState::Playing && self.turn == 0 {
+            self.ai_play();
+        }
     }
 
     pub fn quit(&mut self) {

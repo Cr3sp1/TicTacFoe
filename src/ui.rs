@@ -6,7 +6,7 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph},
 };
 
-use crate::app::{App, CurrentScreen, GameState};
+use crate::app::{App, CurrentScreen, GameMode, GameState};
 use crate::game::Mark;
 
 pub fn render(f: &mut Frame, app: &App) {
@@ -198,7 +198,11 @@ fn render_board(f: &mut Frame, area: Rect, app: &App) {
 
 fn render_instructions(f: &mut Frame, area: Rect, app: &App) {
     let instructions = if app.state == GameState::Playing {
-        "Arrow Keys: Move | Enter: Place Mark | R: Reset Game | M: Main Menu | Q: Quit"
+        if app.turn == 0 && app.mode == GameMode::PvE {
+            "S: Play second | Arrow Keys: Move | Enter: Place Mark | R: Reset Game | M: Main Menu | Q: Quit"
+        } else {
+            "Arrow Keys: Move | Enter: Place Mark | R: Reset Game | M: Main Menu | Q: Quit"
+        }
     } else {
         "R: Reset Game | M: Main Menu | Q: Quit"
     };

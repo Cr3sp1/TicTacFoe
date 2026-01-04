@@ -2,6 +2,8 @@
 name = "tic-tac-foe"
 version = "0.1.0"
 edition = "2024"
+license = "MIT"
+repository = "https://github.com/Cr3sp1/TicTacFoe"
 
 [dependencies]
 crossterm = "0.29.0"
