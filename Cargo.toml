@@ -1,5 +1,6 @@
 [package]
 name = "tic-tac-foe"
+description = "A tui to play tic-tac-toe."
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
