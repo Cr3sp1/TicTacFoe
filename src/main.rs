@@ -3,6 +3,10 @@ use ratatui::Terminal;
 use tic_tac_foe::app::App;
 use tic_tac_foe::ui;
 
+/// Entry point for the Tic-Tac-Toe TUI application.
+///
+/// Initializes the terminal, runs the main event loop, and properly
+/// restores the terminal state on exit.
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut terminal = ratatui::init();
 
@@ -19,6 +23,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Main application loop that handles rendering and input events.
+///
+/// Continuously draws the UI and processes keyboard input until the
+/// user quits the application.
+///
+/// # Arguments
+/// * `terminal` - The terminal backend to render to
+/// * `app` - The application state
+///
+/// # Returns
+/// Result indicating success or any error encountered
 fn run_app<B: ratatui::backend::Backend>(
     terminal: &mut Terminal<B>,
     app: &mut App,

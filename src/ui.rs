@@ -9,6 +9,7 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Paragraph},
 };
 
+/// Main render function that delegates to the appropriate screen renderer.
 pub fn render(f: &mut Frame, app: &App) {
     match &app.current_screen {
         CurrentScreen::MainMenu(menu) => render_main_menu(f, menu),
@@ -16,6 +17,7 @@ pub fn render(f: &mut Frame, app: &App) {
     }
 }
 
+/// Renders the main menu screen with game mode options.
 fn render_main_menu(f: &mut Frame, menu: &MainMenu) {
     if render_size_warning(f, 10, 10) {
         return;
@@ -36,6 +38,7 @@ fn render_main_menu(f: &mut Frame, menu: &MainMenu) {
     render_menu_instructions(f, chunks[2]);
 }
 
+/// Renders the ASCII art title banner.
 fn render_title(f: &mut Frame, area: Rect) {
     let title_area = center_rect(area, 72, 7);
 
@@ -73,6 +76,7 @@ fn render_title(f: &mut Frame, area: Rect) {
     f.render_widget(title, title_area);
 }
 
+/// Renders the menu options with highlighting for the selected option.
 fn render_menu_options(f: &mut Frame, area: Rect, menu: &MainMenu) {
     let options_area = center_rect(area, 25, 9);
 
@@ -111,12 +115,14 @@ fn render_menu_options(f: &mut Frame, area: Rect, menu: &MainMenu) {
     f.render_widget(paragraph, options_area);
 }
 
+/// Renders the instruction text for the main menu.
 fn render_menu_instructions(f: &mut Frame, area: Rect) {
     let instructions = &["Arrow Keys: Navigate | Enter: Select | Q: Quit".to_string()];
 
     render_instructions(f, area, instructions);
 }
 
+/// Renders the game screen with board and status.
 fn render_game(f: &mut Frame, game: &GamePlay) {
     if render_size_warning(f, 10, 10) {
         return;
@@ -142,6 +148,7 @@ fn render_game(f: &mut Frame, game: &GamePlay) {
     render_game_instructions(f, chunks[2], game);
 }
 
+/// Renders the current game mode indicator.
 fn render_game_mode(mode_name: &str, f: &mut Frame, area: Rect) {
     let width = mode_name.chars().count() as u16 + 5;
     let title_area = center_rect(area, width, 3);
@@ -161,6 +168,7 @@ fn render_game_mode(mode_name: &str, f: &mut Frame, area: Rect) {
     f.render_widget(title, title_area);
 }
 
+/// Renders the tic-tac-toe board with current marks and selection highlight.
 fn render_board(f: &mut Frame, area: Rect, game: &GamePlay) {
     let board_area = center_rect(area, 25, 9);
 
@@ -248,6 +256,7 @@ fn render_board(f: &mut Frame, area: Rect, game: &GamePlay) {
     f.render_widget(board, board_area);
 }
 
+/// Renders context-appropriate instructions for the game screen.
 fn render_game_instructions(f: &mut Frame, area: Rect, game: &GamePlay) {
     let instructions = if game.state == GameState::Playing {
         if game.turn == 0 && game.mode == GameMode::PvE {
@@ -268,6 +277,12 @@ fn render_game_instructions(f: &mut Frame, area: Rect, game: &GamePlay) {
     render_instructions(f, area, &instructions);
 }
 
+/// Renders instruction text in a centered, bordered box.
+///
+/// # Arguments
+/// * `f` - The frame to render to
+/// * `area` - The available area
+/// * `instructions` - Lines of instruction text to display
 fn render_instructions(f: &mut Frame, area: Rect, instructions: &[String]) {
     let max_width = instructions
         .iter()
@@ -297,6 +312,7 @@ fn render_instructions(f: &mut Frame, area: Rect, instructions: &[String]) {
     f.render_widget(paragraph, area);
 }
 
+/// Centers a rectangle of given dimensions within the provided area.
 fn center_rect(area: Rect, width: u16, height: u16) -> Rect {
     let vertical = Layout::default()
         .direction(Direction::Vertical)
@@ -317,6 +333,10 @@ fn center_rect(area: Rect, width: u16, height: u16) -> Rect {
         .split(vertical[1])[1]
 }
 
+/// Renders a warning if the terminal is too small.
+///
+/// # Returns
+/// `true` if warning was displayed, `false` if terminal size is adequate
 fn render_size_warning(f: &mut Frame, min_width: u16, min_height: u16) -> bool {
     let size = f.area();
     if size.width >= min_width && size.height >= min_height {
