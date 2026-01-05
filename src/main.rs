@@ -1,6 +1,6 @@
 use crossterm::event::{self, Event, KeyCode};
 use ratatui::Terminal;
-use tic_tac_foe::app::{App};
+use tic_tac_foe::app::App;
 use tic_tac_foe::ui;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

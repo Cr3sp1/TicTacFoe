@@ -71,7 +71,6 @@ impl App {
         }
     }
 
-
     pub fn handle_reset(&mut self) {
         match &mut self.current_screen {
             CurrentScreen::Playing(game) => game.reset_game(),

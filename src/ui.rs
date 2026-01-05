@@ -1,13 +1,13 @@
+use crate::app::{App, CurrentScreen};
+use crate::game::Mark;
+use crate::scenes::{GameMode, GamePlay, GameState, MainMenu};
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, BorderType, Borders, Paragraph},
 };
-use crate::app::{App, CurrentScreen};
-use crate::game::Mark;
-use crate::scenes::{GameMode, GamePlay, GameState, MainMenu};
 
 pub fn render(f: &mut Frame, app: &App) {
     match &app.current_screen {
@@ -16,28 +16,8 @@ pub fn render(f: &mut Frame, app: &App) {
     }
 }
 
-fn render_game(f: &mut Frame, game: &GamePlay) {
-    if render_size_warning(f, 10, 10){
-        return;
-    }
-
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .margin(0)
-        .constraints([
-            Constraint::Max(3),
-            Constraint::Min(11),
-            Constraint::Length(3),
-        ])
-        .split(f.area());
-
-    render_title(f, chunks[0]);
-    render_board(f, chunks[1], game);
-    render_game_instructions(f, chunks[2], game);
-}
-
 fn render_main_menu(f: &mut Frame, menu: &MainMenu) {
-    if render_size_warning(f, 10, 10){
+    if render_size_warning(f, 10, 10) {
         return;
     }
 
@@ -45,7 +25,7 @@ fn render_main_menu(f: &mut Frame, menu: &MainMenu) {
         .direction(Direction::Vertical)
         .margin(0)
         .constraints([
-            Constraint::Length(3),
+            Constraint::Length(7),
             Constraint::Min(10),
             Constraint::Length(3),
         ])
@@ -56,18 +36,47 @@ fn render_main_menu(f: &mut Frame, menu: &MainMenu) {
     render_menu_instructions(f, chunks[2]);
 }
 
-fn render_menu_options(f: &mut Frame, area: Rect, menu: &MainMenu) {
-    let options_area = center_rect(area, 30, 10);
+fn render_title(f: &mut Frame, area: Rect) {
+    let title_area = center_rect(area, 72, 7);
 
-    let mut lines = vec![
-        Line::from(vec![Span::styled(
-            "Select Game Mode:",
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD),
-        )]),
-        Line::from(""),
+    let ascii_art = vec![
+        "OOXXOO  XXOX   OXOO    XOXOXO   XOX    XOOX    OOXXO   XOO   XXOOX",
+        "  OO     XO   X          XO    X   X  X        XX     O   O  OO   ",
+        "  XO     OX   X          OX    XOOXO  O        OOXX   X   O  OXOO ",
+        "  OX     OX   O          OO    O   X  O        XO     O   X  XO   ",
+        "  OO    XXOX   OXXO      XO    X   O   XXOO    OX      OXO   XOXOX",
     ];
+
+    let lines: Vec<Line> = ascii_art
+        .iter()
+        .map(|line| {
+            Line::from(Span::styled(
+                *line,
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ))
+        })
+        .collect();
+    let title = Paragraph::new(lines)
+        .style(
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )
+        .alignment(Alignment::Center)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Double),
+        );
+    f.render_widget(title, title_area);
+}
+
+fn render_menu_options(f: &mut Frame, area: Rect, menu: &MainMenu) {
+    let options_area = center_rect(area, 25, 9);
+
+    let mut lines = vec![Line::from("")];
 
     for (i, option) in menu.options.iter().enumerate() {
         let style = if i == menu.selected_option {
@@ -86,65 +95,102 @@ fn render_menu_options(f: &mut Frame, area: Rect, menu: &MainMenu) {
         lines.push(Line::from(""));
     }
 
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title("Select Game Mode")
+        .title_style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        );
+
     let paragraph = Paragraph::new(lines)
         .alignment(Alignment::Center)
-        .block(Block::default().borders(Borders::ALL));
+        .block(block);
 
     f.render_widget(paragraph, options_area);
 }
 
 fn render_menu_instructions(f: &mut Frame, area: Rect) {
-    let instructions = "Arrow Keys: Navigate | Enter: Select | Q: Quit";
+    let instructions = &["Arrow Keys: Navigate | Enter: Select | Q: Quit".to_string()];
 
     render_instructions(f, area, instructions);
 }
 
-fn render_title(f: &mut Frame, area: Rect) {
-    let title_area = center_rect(area, 100, 3);
-    let title = Paragraph::new("TIC TAC FOE")
+fn render_game(f: &mut Frame, game: &GamePlay) {
+    if render_size_warning(f, 10, 10) {
+        return;
+    }
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(0)
+        .constraints([
+            Constraint::Max(3),
+            Constraint::Min(11),
+            Constraint::Length(4),
+        ])
+        .split(f.area());
+
+    let mode_name = match game.mode {
+        GameMode::PvE => "Play vs AI",
+        GameMode::LocalPvP => "Local PvP",
+    };
+
+    render_game_mode(mode_name, f, chunks[0]);
+    render_board(f, chunks[1], game);
+    render_game_instructions(f, chunks[2], game);
+}
+
+fn render_game_mode(mode_name: &str, f: &mut Frame, area: Rect) {
+    let width = mode_name.chars().count() as u16 + 5;
+    let title_area = center_rect(area, width, 3);
+    let title = Paragraph::new(mode_name)
         .style(
             Style::default()
                 .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),
         )
         .alignment(Alignment::Center)
-        .block(Block::default().borders(Borders::ALL));
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::HeavyDoubleDashed)
+                .title("Mode"),
+        );
     f.render_widget(title, title_area);
 }
 
 fn render_board(f: &mut Frame, area: Rect, game: &GamePlay) {
-    let board_area = center_rect(area, 40, 11);
+    let board_area = center_rect(area, 25, 9);
 
-    let mut lines = vec![];
+    let mut lines = vec![Line::from("")];
 
     // Add current player or game result
-    match game.state {
-        GameState::Playing => {
-            lines.push(Line::from(vec![Span::styled(
-                format!("Current Player: {}", game.active_player),
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            )]));
-        }
-        GameState::Won(winner) => {
-            lines.push(Line::from(vec![Span::styled(
-                format!("Player {} WINS!", winner),
-                Style::default()
-                    .fg(Color::Green)
-                    .add_modifier(Modifier::BOLD),
-            )]));
-        }
-        GameState::Draw => {
-            lines.push(Line::from(vec![Span::styled(
-                "DRAW!",
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            )]));
-        }
-    }
-    lines.push(Line::from(""));
+    let (status, style) = match game.state {
+        GameState::Playing => (
+            format!("Current Player: {}", game.active_player),
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
+        GameState::Won(Mark::X) => (
+            "Player X WINS!".to_string(),
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        ),
+        GameState::Won(Mark::O) => (
+            "Player O WINS!".to_string(),
+            Style::default()
+                .fg(Color::Blue)
+                .add_modifier(Modifier::BOLD),
+        ),
+        GameState::Draw => (
+            "DRAW!".to_string(),
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
+    };
 
     // Render the board
     for row in 0..3 {
@@ -190,9 +236,14 @@ fn render_board(f: &mut Frame, area: Rect, game: &GamePlay) {
         }
     }
 
+    let game_block = Block::default()
+        .borders(Borders::ALL)
+        .title(status)
+        .title_style(style);
+
     let board = Paragraph::new(lines)
         .alignment(Alignment::Center)
-        .block(Block::default().borders(Borders::ALL));
+        .block(game_block);
 
     f.render_widget(board, board_area);
 }
@@ -200,25 +251,48 @@ fn render_board(f: &mut Frame, area: Rect, game: &GamePlay) {
 fn render_game_instructions(f: &mut Frame, area: Rect, game: &GamePlay) {
     let instructions = if game.state == GameState::Playing {
         if game.turn == 0 && game.mode == GameMode::PvE {
-            "S: Play Second | Arrow Keys: Move | Enter: Place Mark | R: Reset Game | M: Main Menu | Q: Quit"
+            vec![
+                "S: Play Second | Arrow Keys: Move | Enter: Place Mark".to_string(),
+                "R: Reset Game | M: Main Menu | Q: Quit".to_string(),
+            ]
         } else {
-            "Arrow Keys: Move | Enter: Place Mark | R: Reset Game | M: Main Menu | Q: Quit"
+            vec![
+                "Arrow Keys: Move | Enter: Place Mark".to_string(),
+                "R: Reset Game | M: Main Menu | Q: Quit".to_string(),
+            ]
         }
     } else {
-        "R: Reset Game | M: Main Menu | Q: Quit"
+        vec!["R: Reset Game | M: Main Menu | Q: Quit".to_string()]
     };
 
-    render_instructions(f, area, instructions);
+    render_instructions(f, area, &instructions);
 }
 
-fn render_instructions(f: &mut Frame, area: Rect, instructions: &str) {
-    let width = instructions.chars().count() as u16 + 5;
-    let area = center_rect(area, width, 3);
+fn render_instructions(f: &mut Frame, area: Rect, instructions: &[String]) {
+    let max_width = instructions
+        .iter()
+        .map(|s| s.chars().count())
+        .max()
+        .unwrap_or(0) as u16
+        + 4;
 
-    let paragraph = Paragraph::new(instructions)
+    let height = instructions.len() as u16 + 2; // +2 for borders
+    let area = center_rect(area, max_width, height);
+
+    let lines: Vec<Line> = instructions
+        .iter()
+        .map(|s| Line::from(s.as_str()))
+        .collect();
+
+    let paragraph = Paragraph::new(lines)
         .style(Style::default().fg(Color::Gray))
         .alignment(Alignment::Center)
-        .block(Block::default().borders(Borders::ALL).title("Commands"));
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .title("Commands"),
+        );
 
     f.render_widget(paragraph, area);
 }
@@ -250,20 +324,16 @@ fn render_size_warning(f: &mut Frame, min_width: u16, min_height: u16) -> bool {
     }
 
     let warning = Paragraph::new(vec![
-        Line::from(vec![
-            Span::styled(
-                "Terminal Too Small!",
-                Style::default()
-                    .fg(Color::Red)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        ]),
+        Line::from(vec![Span::styled(
+            "Terminal Too Small!",
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        )]),
         Line::from(format!("Minimum required: {}x{}", min_width, min_height)),
         Line::from(format!("Current size: {}x{}", size.width, size.height)),
         Line::from("Please resize your terminal"),
     ])
-        .alignment(Alignment::Center)
-        .block(Block::default().borders(Borders::ALL).title("Warning"));
+    .alignment(Alignment::Center)
+    .block(Block::default().borders(Borders::ALL).title("Warning"));
 
     f.render_widget(warning, size);
     true
