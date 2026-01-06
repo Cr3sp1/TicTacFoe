@@ -82,6 +82,12 @@ jobs:
         with:
           path: artifacts
 
+      - name: Flatten artifacts
+        run: |
+          mkdir -p release-assets
+          find artifacts -type f -exec mv {} release-assets/ \;
+          ls -la release-assets/
+
       - name: Extract changelog
         id: changelog
         run: |
