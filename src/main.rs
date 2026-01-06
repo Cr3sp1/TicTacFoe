@@ -1,4 +1,4 @@
-use crossterm::event::{self, Event, KeyCode};
+use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::Terminal;
 use tic_tac_foe::app::App;
 use tic_tac_foe::ui;
@@ -45,35 +45,37 @@ where
         terminal.draw(|f| ui::render(f, app))?;
 
         if let Event::Key(key) = event::read()? {
-            match key.code {
-                KeyCode::Char('q') | KeyCode::Char('Q') => {
-                    app.quit();
+            if key.kind == KeyEventKind::Press {
+                match key.code {
+                    KeyCode::Char('q') | KeyCode::Char('Q') => {
+                        app.quit();
+                    }
+                    KeyCode::Char('r') | KeyCode::Char('R') => {
+                        app.handle_reset();
+                    }
+                    KeyCode::Char('m') | KeyCode::Char('M') => {
+                        app.handle_main_menu();
+                    }
+                    KeyCode::Char('s') | KeyCode::Char('S') => {
+                        app.handle_second();
+                    }
+                    KeyCode::Left | KeyCode::Char('h') => {
+                        app.handle_left();
+                    }
+                    KeyCode::Right | KeyCode::Char('l') => {
+                        app.handle_right();
+                    }
+                    KeyCode::Up | KeyCode::Char('k') => {
+                        app.handle_up();
+                    }
+                    KeyCode::Down | KeyCode::Char('j') => {
+                        app.handle_down();
+                    }
+                    KeyCode::Enter | KeyCode::Char(' ') => {
+                        app.handle_enter();
+                    }
+                    _ => {}
                 }
-                KeyCode::Char('r') | KeyCode::Char('R') => {
-                    app.handle_reset();
-                }
-                KeyCode::Char('m') | KeyCode::Char('M') => {
-                    app.handle_main_menu();
-                }
-                KeyCode::Char('s') | KeyCode::Char('S') => {
-                    app.handle_second();
-                }
-                KeyCode::Left | KeyCode::Char('h') => {
-                    app.handle_left();
-                }
-                KeyCode::Right | KeyCode::Char('l') => {
-                    app.handle_right();
-                }
-                KeyCode::Up | KeyCode::Char('k') => {
-                    app.handle_up();
-                }
-                KeyCode::Down | KeyCode::Char('j') => {
-                    app.handle_down();
-                }
-                KeyCode::Enter | KeyCode::Char(' ') => {
-                    app.handle_enter();
-                }
-                _ => {}
             }
         }
 

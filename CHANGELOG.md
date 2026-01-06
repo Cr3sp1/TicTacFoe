@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.1] - 2026/01/06
+
+### Bug Fixes
+- On Windows kwy presses were counted twice
+
 ## [0.1.0] - 2026/01/06
 
 ### Added
