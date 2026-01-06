@@ -92,7 +92,14 @@ jobs:
       - name: Flatten artifacts
         run: |
           mkdir -p release-assets
-          find artifacts -type f -exec mv {} release-assets/ \;
+          for dir in artifacts/*/; do
+            asset_name=$(basename "$dir")
+            file=$(find "$dir" -type f)
+            if [ -f "$file" ]; then
+              cp "$file" "release-assets/$asset_name"
+              echo "Copied to: release-assets/$asset_name"
+            fi
+          done
           echo "=== Release assets ==="
           ls -la release-assets/
 
