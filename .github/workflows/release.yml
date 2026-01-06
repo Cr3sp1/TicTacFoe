@@ -82,10 +82,18 @@ jobs:
         with:
           path: artifacts
 
+      - name: Debug - Show artifact structure
+        run: |
+          echo "=== Artifacts directory structure ==="
+          ls -R artifacts/
+          echo "=== Finding all files ==="
+          find artifacts -type f
+
       - name: Flatten artifacts
         run: |
           mkdir -p release-assets
           find artifacts -type f -exec mv {} release-assets/ \;
+          echo "=== Release assets ==="
           ls -la release-assets/
 
       - name: Extract changelog
@@ -100,7 +108,7 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: artifacts/**/*
+          files: release-assets/*
           draft: false
           prerelease: false
           name: Release ${{ github.ref_name }}
