@@ -1,5 +1,8 @@
 # Changelog
 
+### Bug Fixes
+- Fix link to binaries in readme.
+
 ## [0.1.1] - 2026/01/06
 
 ### Bug Fixes
