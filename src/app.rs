@@ -1,8 +1,9 @@
-use crate::scenes::{GameMode, GamePlay, MainMenu};
+use crate::scenes::{GameMode, GamePlay, Menu};
 
 /// Represents the current screen being displayed in the application.
 pub enum CurrentScreen {
-    MainMenu(MainMenu),
+    MainMenu(Menu),
+    ConnectionMenu(Menu),
     Playing(GamePlay),
 }
 
@@ -19,7 +20,7 @@ impl App {
     /// Creates a new App starting at the main menu.
     pub fn new() -> Self {
         Self {
-            current_screen: CurrentScreen::MainMenu(MainMenu::new()),
+            current_screen: CurrentScreen::MainMenu(Menu::main()),
             should_quit: false,
         }
     }
@@ -29,22 +30,28 @@ impl App {
         self.current_screen = CurrentScreen::Playing(GamePlay::new(mode));
     }
 
+    pub fn go_to_connection_menu(&mut self) {
+        self.current_screen = CurrentScreen::ConnectionMenu(Menu::connection());
+    }
+
     /// Returns to the main menu, discarding any active game.
     pub fn go_to_main_menu(&mut self) {
-        self.current_screen = CurrentScreen::MainMenu(MainMenu::new());
+        self.current_screen = CurrentScreen::MainMenu(Menu::main());
     }
 
     /// Handles left arrow or 'h' key input.
     pub fn handle_left(&mut self) {
-        if let CurrentScreen::Playing(game) = &mut self.current_screen {
-            game.input_left();
+        match &mut self.current_screen {
+            CurrentScreen::Playing(game) => game.input_left(),
+            _ => (),
         }
     }
 
     /// Handles right arrow or 'l' key input.
     pub fn handle_right(&mut self) {
-        if let CurrentScreen::Playing(game) = &mut self.current_screen {
-            game.input_right();
+        match &mut self.current_screen {
+            CurrentScreen::Playing(game) => game.input_right(),
+            _ => (),
         }
     }
 
@@ -54,6 +61,7 @@ impl App {
     pub fn handle_up(&mut self) {
         match &mut self.current_screen {
             CurrentScreen::MainMenu(menu) => menu.move_up(),
+            CurrentScreen::ConnectionMenu(menu) => menu.move_up(),
             CurrentScreen::Playing(game) => game.input_up(),
         }
     }
@@ -64,6 +72,7 @@ impl App {
     pub fn handle_down(&mut self) {
         match &mut self.current_screen {
             CurrentScreen::MainMenu(menu) => menu.move_down(),
+            CurrentScreen::ConnectionMenu(menu) => menu.move_down(),
             CurrentScreen::Playing(game) => game.input_down(),
         }
     }
@@ -74,12 +83,18 @@ impl App {
     pub fn handle_enter(&mut self) {
         match &mut self.current_screen {
             CurrentScreen::MainMenu(menu) => match menu.get_selected() {
+                "Online PvP" => self.go_to_connection_menu(),
                 "Local PvP" => self.start_game(GameMode::LocalPvP),
                 "Play vs AI" => self.start_game(GameMode::PvE),
                 "Quit" => self.should_quit = true,
                 _ => panic!("Option selected in Main Menu does not exist."),
             },
-            CurrentScreen::Playing(game) => game.make_move(),
+            CurrentScreen::ConnectionMenu(menu) => match menu.get_selected() {
+                "Host a Game" => self.host_game(),
+                "Go Back" => self.go_to_main_menu(),
+                _ => panic!("Option selected in Connection Menu does not exist."),
+            },
+            CurrentScreen::Playing(game) => game.make_move()
         }
     }
 
@@ -103,6 +118,7 @@ impl App {
     pub fn handle_main_menu(&mut self) {
         match &mut self.current_screen {
             CurrentScreen::Playing(_) => self.go_to_main_menu(),
+            CurrentScreen::ConnectionMenu(_) => self.go_to_main_menu(),
             _ => {}
         }
     }
@@ -111,6 +127,8 @@ impl App {
     pub fn quit(&mut self) {
         self.should_quit = true;
     }
+
+    pub fn host_game(&mut self) {}
 }
 
 #[cfg(test)]
@@ -164,12 +182,15 @@ mod tests {
     }
 
     #[test]
-    fn test_handle_enter_in_menu_starts_pvp() {
+    fn test_handle_enter_in_menu_starts_connection_menu() {
         let mut app = App::new();
-        // Default selection is "Local PvP"
+        // Default selection is "Online PvP"
         app.handle_enter();
 
-        assert!(matches!(app.current_screen, CurrentScreen::Playing(_)));
+        assert!(matches!(
+            app.current_screen,
+            CurrentScreen::ConnectionMenu(_)
+        ));
     }
 
     #[test]

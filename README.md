@@ -16,7 +16,7 @@ Installing via Cargo or from source additionally requires Rust 1.70 or higher an
 
 ### Download Pre-built Binary (Recommended)
 
-Download the appropriate binary for your platform from the [latest release](https://github.com/Cr3sp1/tic-tac-foe/releases/latest):
+Download the appropriate binary for your platform from the [latest release](https://github.com/Cr3sp1/TicTacFoe/releases/latest):
 
 - **Linux**: `tic-tac-foe-linux-x86_64`
 - **macOS (Intel)**: `tic-tac-foe-macos-x86_64`
