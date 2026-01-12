@@ -1,6 +1,6 @@
 use crate::app::{App, CurrentScreen};
 use crate::game::Mark;
-use crate::scenes::{ConnectionMenu, GameMode, GamePlay, GameState, MainMenu};
+use crate::scenes::{GameMode, GamePlay, GameState, Menu};
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -14,12 +14,12 @@ pub fn render(f: &mut Frame, app: &App) {
     match &app.current_screen {
         CurrentScreen::MainMenu(menu) => render_main_menu(f, menu),
         CurrentScreen::Playing(game) => render_game(f, game),
-        CurrentScreen::ConnectionMenu(connection) => render_connection_menu(f, connection),
+        CurrentScreen::ConnectionMenu(menu) => render_connection_menu(f, menu),
     }
 }
 
 /// Renders the main menu screen with game mode options.
-fn render_main_menu(f: &mut Frame, menu: &MainMenu) {
+fn render_main_menu(f: &mut Frame, menu: &Menu) {
     if render_size_warning(f, 10, 10) {
         return;
     }
@@ -35,7 +35,7 @@ fn render_main_menu(f: &mut Frame, menu: &MainMenu) {
         .split(f.area());
 
     render_title(f, chunks[0]);
-    render_menu_options(f, chunks[1], menu);
+    render_menu_options(f, chunks[1], menu, "Select Game Mode");
     render_main_menu_instructions(f, chunks[2]);
 }
 
@@ -78,7 +78,7 @@ fn render_title(f: &mut Frame, area: Rect) {
 }
 
 /// Renders the menu options with highlighting for the selected option.
-fn render_menu_options(f: &mut Frame, area: Rect, menu: &MainMenu) {
+fn render_menu_options(f: &mut Frame, area: Rect, menu: &Menu, title: &str) {
     let options_area = center_rect(area, 25, 11);
 
     let mut lines = vec![Line::from("")];
@@ -102,7 +102,7 @@ fn render_menu_options(f: &mut Frame, area: Rect, menu: &MainMenu) {
 
     let block = Block::default()
         .borders(Borders::ALL)
-        .title("Select Game Mode")
+        .title(title)
         .title_style(
             Style::default()
                 .fg(Color::Yellow)
@@ -123,7 +123,7 @@ fn render_main_menu_instructions(f: &mut Frame, area: Rect) {
     render_instructions(f, area, instructions);
 }
 
-fn render_connection_menu(f: &mut Frame, _connection: &ConnectionMenu) {
+fn render_connection_menu(f: &mut Frame, menu: &Menu) {
     if render_size_warning(f, 10, 10) {
         return;
     }
@@ -133,12 +133,13 @@ fn render_connection_menu(f: &mut Frame, _connection: &ConnectionMenu) {
         .margin(0)
         .constraints([
             Constraint::Max(3),
-            Constraint::Min(1),
+            Constraint::Length(7),
             Constraint::Length(4),
         ])
         .split(f.area());
 
     render_connection_title(f, chunks[0]);
+    render_menu_options(f, chunks[1], menu, "Select Connection");
     render_connection_menu_instructions(f, chunks[2]);
 }
 
@@ -161,7 +162,8 @@ fn render_connection_title(f: &mut Frame, area: Rect) {
 }
 
 fn render_connection_menu_instructions(f: &mut Frame, area: Rect) {
-    let instructions = &[" M: Main Menu | Q: Quit".to_string()];
+    let instructions =
+        &["Arrow Keys: Navigate | Enter: Select | M: Main Menu | Q: Quit".to_string()];
 
     render_instructions(f, area, instructions);
 }

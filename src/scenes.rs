@@ -18,17 +18,25 @@ pub enum GameState {
 }
 
 /// Main menu scene with selectable options.
-pub struct MainMenu {
+pub struct Menu {
     pub selected_option: usize,
     pub options: Vec<&'static str>,
 }
 
-impl MainMenu {
+impl Menu {
     /// Creates a new main menu with default options.
-    pub fn new() -> Self {
+    pub fn main() -> Self {
         Self {
             selected_option: 0,
             options: vec!["Online PvP", "Local PvP", "Play vs AI", "Quit"],
+        }
+    }
+
+    /// Creates a new connection menu with default options.
+    pub fn connection() -> Self {
+        Self {
+            selected_option: 0,
+            options: vec!["Host a Game", "Go Back"],
         }
     }
 
@@ -326,15 +334,13 @@ impl GamePlay {
     }
 }
 
-pub struct ConnectionMenu {}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_main_menu_new() {
-        let menu = MainMenu::new();
+        let menu = Menu::main();
         assert_eq!(menu.selected_option, 0);
         assert_eq!(menu.options.len(), 4);
         assert_eq!(menu.get_selected(), "Online PvP");
@@ -342,7 +348,7 @@ mod tests {
 
     #[test]
     fn test_main_menu_move_down() {
-        let mut menu = MainMenu::new();
+        let mut menu = Menu::main();
         menu.move_down();
         menu.move_down();
         assert_eq!(menu.selected_option, 2);
@@ -351,14 +357,14 @@ mod tests {
 
     #[test]
     fn test_main_menu_move_up_wraps() {
-        let mut menu = MainMenu::new();
+        let mut menu = Menu::main();
         menu.move_up();
         assert_eq!(menu.get_selected(), "Quit");
     }
 
     #[test]
     fn test_main_menu_move_down_wraps() {
-        let mut menu = MainMenu::new();
+        let mut menu = Menu::main();
         menu.selected_option = 3;
         menu.move_down();
         assert_eq!(menu.selected_option, 0);

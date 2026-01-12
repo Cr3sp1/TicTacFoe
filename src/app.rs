@@ -1,12 +1,11 @@
-use crate::scenes::{ConnectionMenu, GameMode, GamePlay, MainMenu};
+use crate::scenes::{GameMode, GamePlay, Menu};
 
 /// Represents the current screen being displayed in the application.
 pub enum CurrentScreen {
-    MainMenu(MainMenu),
-    ConnectionMenu(ConnectionMenu),
+    MainMenu(Menu),
+    ConnectionMenu(Menu),
     Playing(GamePlay),
 }
-
 
 /// Main application state manager.
 ///
@@ -21,7 +20,7 @@ impl App {
     /// Creates a new App starting at the main menu.
     pub fn new() -> Self {
         Self {
-            current_screen: CurrentScreen::MainMenu(MainMenu::new()),
+            current_screen: CurrentScreen::MainMenu(Menu::main()),
             should_quit: false,
         }
     }
@@ -32,12 +31,12 @@ impl App {
     }
 
     pub fn go_to_connection_menu(&mut self) {
-        self.current_screen = CurrentScreen::ConnectionMenu(ConnectionMenu{});
+        self.current_screen = CurrentScreen::ConnectionMenu(Menu::connection());
     }
 
     /// Returns to the main menu, discarding any active game.
     pub fn go_to_main_menu(&mut self) {
-        self.current_screen = CurrentScreen::MainMenu(MainMenu::new());
+        self.current_screen = CurrentScreen::MainMenu(Menu::main());
     }
 
     /// Handles left arrow or 'h' key input.
@@ -62,8 +61,8 @@ impl App {
     pub fn handle_up(&mut self) {
         match &mut self.current_screen {
             CurrentScreen::MainMenu(menu) => menu.move_up(),
+            CurrentScreen::ConnectionMenu(menu) => menu.move_up(),
             CurrentScreen::Playing(game) => game.input_up(),
-            _ => (),
         }
     }
 
@@ -73,8 +72,8 @@ impl App {
     pub fn handle_down(&mut self) {
         match &mut self.current_screen {
             CurrentScreen::MainMenu(menu) => menu.move_down(),
+            CurrentScreen::ConnectionMenu(menu) => menu.move_down(),
             CurrentScreen::Playing(game) => game.input_down(),
-            _ => (),
         }
     }
 
@@ -90,8 +89,12 @@ impl App {
                 "Quit" => self.should_quit = true,
                 _ => panic!("Option selected in Main Menu does not exist."),
             },
-            CurrentScreen::Playing(game) => game.make_move(),
-            _ => (),
+            CurrentScreen::ConnectionMenu(menu) => match menu.get_selected() {
+                "Host a Game" => self.host_game(),
+                "Go Back" => self.go_to_main_menu(),
+                _ => panic!("Option selected in Connection Menu does not exist."),
+            },
+            CurrentScreen::Playing(game) => game.make_move()
         }
     }
 
@@ -124,6 +127,8 @@ impl App {
     pub fn quit(&mut self) {
         self.should_quit = true;
     }
+
+    pub fn host_game(&mut self) {}
 }
 
 #[cfg(test)]
@@ -182,7 +187,10 @@ mod tests {
         // Default selection is "Online PvP"
         app.handle_enter();
 
-        assert!(matches!(app.current_screen, CurrentScreen::ConnectionMenu(_)));
+        assert!(matches!(
+            app.current_screen,
+            CurrentScreen::ConnectionMenu(_)
+        ));
     }
 
     #[test]
