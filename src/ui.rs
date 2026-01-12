@@ -1,6 +1,6 @@
 use crate::app::{App, CurrentScreen};
 use crate::game::Mark;
-use crate::scenes::{GameMode, GamePlay, GameState, MainMenu};
+use crate::scenes::{ConnectionMenu, GameMode, GamePlay, GameState, MainMenu};
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -14,6 +14,7 @@ pub fn render(f: &mut Frame, app: &App) {
     match &app.current_screen {
         CurrentScreen::MainMenu(menu) => render_main_menu(f, menu),
         CurrentScreen::Playing(game) => render_game(f, game),
+        CurrentScreen::ConnectionMenu(connection) => render_connection_menu(f, connection),
     }
 }
 
@@ -35,7 +36,7 @@ fn render_main_menu(f: &mut Frame, menu: &MainMenu) {
 
     render_title(f, chunks[0]);
     render_menu_options(f, chunks[1], menu);
-    render_menu_instructions(f, chunks[2]);
+    render_main_menu_instructions(f, chunks[2]);
 }
 
 /// Renders the ASCII art title banner.
@@ -78,7 +79,7 @@ fn render_title(f: &mut Frame, area: Rect) {
 
 /// Renders the menu options with highlighting for the selected option.
 fn render_menu_options(f: &mut Frame, area: Rect, menu: &MainMenu) {
-    let options_area = center_rect(area, 25, 9);
+    let options_area = center_rect(area, 25, 11);
 
     let mut lines = vec![Line::from("")];
 
@@ -116,8 +117,51 @@ fn render_menu_options(f: &mut Frame, area: Rect, menu: &MainMenu) {
 }
 
 /// Renders the instruction text for the main menu.
-fn render_menu_instructions(f: &mut Frame, area: Rect) {
+fn render_main_menu_instructions(f: &mut Frame, area: Rect) {
     let instructions = &["Arrow Keys: Navigate | Enter: Select | Q: Quit".to_string()];
+
+    render_instructions(f, area, instructions);
+}
+
+fn render_connection_menu(f: &mut Frame, _connection: &ConnectionMenu) {
+    if render_size_warning(f, 10, 10) {
+        return;
+    }
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(0)
+        .constraints([
+            Constraint::Max(3),
+            Constraint::Min(1),
+            Constraint::Length(4),
+        ])
+        .split(f.area());
+
+    render_connection_title(f, chunks[0]);
+    render_connection_menu_instructions(f, chunks[2]);
+}
+
+fn render_connection_title(f: &mut Frame, area: Rect) {
+    let width = 19;
+    let title_area = center_rect(area, width, 3);
+    let title = Paragraph::new("Connection Menu")
+        .style(
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )
+        .alignment(Alignment::Center)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::HeavyDoubleDashed),
+        );
+    f.render_widget(title, title_area);
+}
+
+fn render_connection_menu_instructions(f: &mut Frame, area: Rect) {
+    let instructions = &[" M: Main Menu | Q: Quit".to_string()];
 
     render_instructions(f, area, instructions);
 }
@@ -141,6 +185,7 @@ fn render_game(f: &mut Frame, game: &GamePlay) {
     let mode_name = match game.mode {
         GameMode::PvE => "Play vs AI",
         GameMode::LocalPvP => "Local PvP",
+        GameMode::OnlinePvP => "Online PvP",
     };
 
     render_game_mode(mode_name, f, chunks[0]);

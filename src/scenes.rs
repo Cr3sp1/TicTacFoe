@@ -6,6 +6,7 @@ use crate::game::{Board, Mark};
 pub enum GameMode {
     PvE,
     LocalPvP,
+    OnlinePvP,
 }
 
 /// Represents the current state of a tic-tac-toe game.
@@ -27,7 +28,7 @@ impl MainMenu {
     pub fn new() -> Self {
         Self {
             selected_option: 0,
-            options: vec!["Local PvP", "Play vs AI", "Quit"],
+            options: vec!["Online PvP", "Local PvP", "Play vs AI", "Quit"],
         }
     }
 
@@ -325,6 +326,8 @@ impl GamePlay {
     }
 }
 
+pub struct ConnectionMenu {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -333,15 +336,16 @@ mod tests {
     fn test_main_menu_new() {
         let menu = MainMenu::new();
         assert_eq!(menu.selected_option, 0);
-        assert_eq!(menu.options.len(), 3);
-        assert_eq!(menu.get_selected(), "Local PvP");
+        assert_eq!(menu.options.len(), 4);
+        assert_eq!(menu.get_selected(), "Online PvP");
     }
 
     #[test]
     fn test_main_menu_move_down() {
         let mut menu = MainMenu::new();
         menu.move_down();
-        assert_eq!(menu.selected_option, 1);
+        menu.move_down();
+        assert_eq!(menu.selected_option, 2);
         assert_eq!(menu.get_selected(), "Play vs AI");
     }
 
@@ -349,14 +353,13 @@ mod tests {
     fn test_main_menu_move_up_wraps() {
         let mut menu = MainMenu::new();
         menu.move_up();
-        assert_eq!(menu.selected_option, 2);
         assert_eq!(menu.get_selected(), "Quit");
     }
 
     #[test]
     fn test_main_menu_move_down_wraps() {
         let mut menu = MainMenu::new();
-        menu.selected_option = 2;
+        menu.selected_option = 3;
         menu.move_down();
         assert_eq!(menu.selected_option, 0);
     }
