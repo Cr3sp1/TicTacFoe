@@ -1,20 +1,12 @@
 use crate::ai::SimpleAi;
-use crate::game::{Mark};
-use crate::game::base::{Board};
+use crate::game::base::Board;
+use crate::game::{GameState, Mark};
 
 /// Represents the game mode selection.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum GameMode {
     PvE,
     LocalPvP,
-}
-
-/// Represents the current state of a tic-tac-toe game.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum GameState {
-    Playing,
-    Won(Mark),
-    Draw,
 }
 
 /// Main menu scene with selectable options.
@@ -56,7 +48,6 @@ impl MainMenu {
 pub struct GamePlay {
     pub board: Board,
     pub active_player: Mark,
-    pub state: GameState,
     pub turn: u32,
     pub mode: GameMode,
     pub selected_row: usize,
@@ -78,7 +69,6 @@ impl GamePlay {
         Self {
             board: Board::new(),
             active_player: Mark::X,
-            state: GameState::Playing,
             turn: 0,
             mode,
             selected_row: 0,
@@ -224,7 +214,7 @@ impl GamePlay {
     /// After a valid move, checks for win/draw conditions and switches players.
     /// In PvE mode, triggers the AI to make its move.
     pub fn make_move(&mut self) {
-        if self.state != GameState::Playing {
+        if self.board.state != GameState::Playing {
             return;
         }
 
@@ -244,13 +234,11 @@ impl GamePlay {
 
         self.turn += 1;
 
-        if let Some(winner) = self.board.check_all() {
-            self.state = GameState::Won(winner);
+        if let Some(_) = self.board.check_win() {
             return;
         }
 
-        if self.board.check_complete() {
-            self.state = GameState::Draw;
+        if self.board.check_draw() {
             return;
         }
 
@@ -272,13 +260,11 @@ impl GamePlay {
             let (ai_row, ai_col) = ai.choose_move(self.board.clone());
             self.board.set(ai_row, ai_col, Some(ai.ai_mark));
 
-            if let Some(winner) = self.board.check_all() {
-                self.state = GameState::Won(winner);
+            if let Some(_) = self.board.check_win() {
                 return;
             }
 
-            if self.board.check_complete() {
-                self.state = GameState::Draw;
+            if self.board.check_draw() {
                 return;
             }
 
@@ -295,14 +281,14 @@ impl GamePlay {
 
     /// Allows the AI to play first if the game just started.
     pub fn play_second(&mut self) {
-        if self.state == GameState::Playing && self.turn == 0 {
+        if self.board.state == GameState::Playing && self.turn == 0 {
             self.ai_play();
         }
     }
 
     /// Resets the selected position to the first available cell.
     fn reset_position(&mut self) {
-        if self.state == GameState::Draw {
+        if self.board.state == GameState::Draw {
             return;
         }
         (self.selected_row, self.selected_col) = (0, 0);
@@ -319,7 +305,6 @@ impl GamePlay {
     pub fn reset_game(&mut self) {
         self.board = Board::new();
         self.active_player = Mark::X;
-        self.state = GameState::Playing;
         self.turn = 0;
         self.selected_row = 0;
         self.selected_col = 0;
@@ -367,7 +352,7 @@ mod tests {
         let game = GamePlay::new(GameMode::LocalPvP);
         assert_eq!(game.mode, GameMode::LocalPvP);
         assert_eq!(game.active_player, Mark::X);
-        assert_eq!(game.state, GameState::Playing);
+        assert_eq!(game.board.state, GameState::Playing);
         assert_eq!(game.turn, 0);
         assert!(game.ai.is_none());
     }
@@ -426,7 +411,7 @@ mod tests {
 
         game.make_move();
 
-        assert_eq!(game.state, GameState::Won(Mark::X));
+        assert_eq!(game.board.state, GameState::Won(Mark::X));
     }
 
     #[test]
@@ -440,7 +425,7 @@ mod tests {
 
         assert_eq!(game.turn, 0);
         assert_eq!(game.active_player, Mark::X);
-        assert_eq!(game.state, GameState::Playing);
+        assert_eq!(game.board.state, GameState::Playing);
         assert!(game.board.get(0, 0).is_none());
     }
 

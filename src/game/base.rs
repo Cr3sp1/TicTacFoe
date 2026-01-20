@@ -1,5 +1,5 @@
-use std::fmt;
 use super::*;
+use std::fmt;
 
 /// A 3x3 tic-tac-toe board.
 ///
@@ -8,12 +8,16 @@ use super::*;
 #[derive(Copy, Clone)]
 pub struct Board {
     cells: [Option<Mark>; 9],
+    pub state: GameState,
 }
 
 impl Board {
     /// Creates a new empty board with all cells set to None.
     pub fn new() -> Self {
-        Board { cells: [None; 9] }
+        Board {
+            cells: [None; 9],
+            state: GameState::Playing,
+        }
     }
 
     /// Gets the mark at the specified position.
@@ -109,18 +113,22 @@ impl Board {
     ///
     /// Returns the winning mark if any winning condition is met, or None if
     /// there is no winner yet.
-    pub fn check_all(&self) -> Option<Mark> {
+    pub fn check_win(&mut self) -> Option<Mark> {
         if let Some(mark) = self.check_diag_dexter() {
+            self.state = GameState::Won(mark);
             return Some(mark);
         }
         if let Some(mark) = self.check_diag_sinister() {
+            self.state = GameState::Won(mark);
             return Some(mark);
         }
         for i in 0..3 {
             if let Some(mark) = self.check_row(i) {
+                self.state = GameState::Won(mark);
                 return Some(mark);
             }
             if let Some(mark) = self.check_col(i) {
+                self.state = GameState::Won(mark);
                 return Some(mark);
             }
         }
@@ -131,12 +139,13 @@ impl Board {
     /// Checks if all cells on the board are filled.
     ///
     /// Returns true if every cell contains a mark, false otherwise.
-    pub fn check_complete(&self) -> bool {
+    pub fn check_draw(&mut self) -> bool {
         for i in 0..9 {
             if self.cells[i].is_none() {
                 return false;
             }
         }
+        self.state = GameState::Draw;
         true
     }
 }
@@ -247,39 +256,45 @@ mod tests {
     }
 
     #[test]
-    fn test_check_all() {
+    fn test_check_win() {
         let mut board = Board::new();
         assert_eq!(board.check_diag_dexter(), None);
         assert_eq!(board.check_diag_sinister(), None);
+        assert_eq!(board.state, GameState::Playing);
 
         board.set_row(0, [Some(Mark::X), Some(Mark::O), Some(Mark::O)]);
         board.set_row(1, [Some(Mark::X), None, Some(Mark::X)]);
         board.set_row(2, [None, Some(Mark::O), None]);
-        assert_eq!(board.check_all(), None);
+        assert_eq!(board.check_win(), None);
+        assert_eq!(board.state, GameState::Playing);
 
         board.set(1, 1, Some(Mark::X));
-        assert_eq!(board.check_all(), Some(Mark::X));
+        assert_eq!(board.check_win(), Some(Mark::X));
+        assert_eq!(board.state, GameState::Won(Mark::X));
 
         board.set(1, 1, Some(Mark::O));
-        assert_eq!(board.check_all(), Some(Mark::O));
+        assert_eq!(board.check_win(), Some(Mark::O));
+        assert_eq!(board.state, GameState::Won(Mark::O));
 
         board.set(0, 1, Some(Mark::X));
-        assert_eq!(board.check_all(), None);
+        assert_eq!(board.check_win(), None);
         board.set(2, 0, Some(Mark::O));
-        assert_eq!(board.check_all(), Some(Mark::O));
+        assert_eq!(board.check_win(), Some(Mark::O));
     }
 
     #[test]
-    fn test_check_complete() {
+    fn test_check_draw() {
         let mut board = Board::new();
-        assert_eq!(board.check_complete(), false);
+        assert_eq!(board.check_draw(), false);
 
         board.set_row(0, [Some(Mark::X), Some(Mark::O), Some(Mark::O)]);
         board.set_row(1, [Some(Mark::X), None, Some(Mark::X)]);
         board.set_row(2, [Some(Mark::O), Some(Mark::O), Some(Mark::X)]);
-        assert_eq!(board.check_complete(), false);
+        assert_eq!(board.check_draw(), false);
+        assert_eq!(board.state, GameState::Playing);
 
         board.set(1, 1, Some(Mark::X));
-        assert_eq!(board.check_complete(), true);
+        assert_eq!(board.check_draw(), true);
+        assert_eq!(board.state, GameState::Draw);
     }
 }

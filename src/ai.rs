@@ -1,5 +1,5 @@
-use crate::game::{Mark};
-use crate::game::base::{Board};
+use crate::game::Mark;
+use crate::game::base::Board;
 use rand::prelude::*;
 use std::vec::Vec;
 
@@ -56,7 +56,7 @@ impl SimpleAi {
         // check for available wins
         for &(row, col) in available.iter() {
             board.set(row, col, Some(self.ai_mark));
-            match board.check_all() {
+            match board.check_win() {
                 Some(_) => {
                     return (row, col);
                 }
@@ -68,7 +68,7 @@ impl SimpleAi {
         // check for possible losses
         for &(row, col) in available.iter() {
             board.set(row, col, Some(self.player_mark));
-            match board.check_all() {
+            match board.check_win() {
                 Some(_) => {
                     return (row, col);
                 }

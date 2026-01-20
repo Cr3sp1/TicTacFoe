@@ -18,3 +18,10 @@ impl fmt::Display for Mark {
         }
     }
 }
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum GameState {
+    Playing,
+    Won(Mark),
+    Draw,
+}

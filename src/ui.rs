@@ -1,6 +1,6 @@
 use crate::app::{App, CurrentScreen};
-use crate::game::{Mark};
-use crate::scenes::{GameMode, GamePlay, GameState, MainMenu};
+use crate::game::{GameState, Mark};
+use crate::scenes::{GameMode, GamePlay, MainMenu};
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -175,7 +175,7 @@ fn render_board(f: &mut Frame, area: Rect, game: &GamePlay) {
     let mut lines = vec![Line::from("")];
 
     // Add current player or game result
-    let (status, style) = match game.state {
+    let (status, style) = match game.board.state {
         GameState::Playing => (
             format!("Current Player: {}", game.active_player),
             Style::default()
@@ -212,7 +212,7 @@ fn render_board(f: &mut Frame, area: Rect, game: &GamePlay) {
 
             let style = if row == game.selected_row
                 && col == game.selected_col
-                && game.state == GameState::Playing
+                && game.board.state == GameState::Playing
             {
                 cell_content = match game.active_player {
                     Mark::X => "X",
@@ -258,7 +258,7 @@ fn render_board(f: &mut Frame, area: Rect, game: &GamePlay) {
 
 /// Renders context-appropriate instructions for the game screen.
 fn render_game_instructions(f: &mut Frame, area: Rect, game: &GamePlay) {
-    let instructions = if game.state == GameState::Playing {
+    let instructions = if game.board.state == GameState::Playing {
         if game.turn == 0 && game.mode == GameMode::PvE {
             vec![
                 "S: Play Second | Arrow Keys: Move | Enter: Place Mark".to_string(),
