@@ -1,4 +1,5 @@
-use crate::game::{Board, Mark};
+use crate::game::{Mark};
+use crate::game::base::{Board};
 use rand::prelude::*;
 use std::vec::Vec;
 

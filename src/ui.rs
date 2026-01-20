@@ -1,5 +1,5 @@
 use crate::app::{App, CurrentScreen};
-use crate::game::Mark;
+use crate::game::{Mark};
 use crate::scenes::{GameMode, GamePlay, GameState, MainMenu};
 use ratatui::{
     Frame,

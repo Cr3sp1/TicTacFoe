@@ -1,5 +1,6 @@
 use crate::ai::SimpleAi;
-use crate::game::{Board, Mark};
+use crate::game::{Mark};
+use crate::game::base::{Board};
 
 /// Represents the game mode selection.
 #[derive(Debug, Clone, Copy, PartialEq)]
