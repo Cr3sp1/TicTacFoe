@@ -30,7 +30,7 @@ impl Board {
     /// Panics if row or col is greater than 3.
     pub fn get(&self, row: usize, col: usize) -> Option<Mark> {
         if row > 3 || col > 3 {
-            panic!("Tried to access board position ({row}, {col}) which is out of bounds");
+            panic!("Tried to access board position ({row}, {col}) which is out of bounds.");
         }
         self.cells[row * 3 + col]
     }
@@ -46,7 +46,7 @@ impl Board {
     /// Panics if row or col is greater than 3.
     pub fn set(&mut self, row: usize, col: usize, mark: Option<Mark>) {
         if row > 3 || col > 3 {
-            panic!("Tried to access board position ({row}, {col}) which is out of bounds");
+            panic!("Tried to access board position ({row}, {col}) which is out of bounds.");
         }
         self.cells[row * 3 + col] = mark;
     }
@@ -149,6 +149,19 @@ impl Board {
         true
     }
 
+    /// Makes a move on the board at the specified position.
+    ///
+    /// Places the given mark at the specified row and column, then checks
+    /// if the move resulted in a win or draw and updates the game state.
+    ///
+    /// # Arguments
+    /// * `row` - Row index (0-2)
+    /// * `col` - Column index (0-2)
+    /// * `mark` - The mark to place (Mark::X or Mark::O)
+    ///
+    /// # Panics
+    /// * Panics if the game is already over (state is not GameState::Playing)
+    /// * Panics if the specified position is already occupied
     pub fn make_move(&mut self, row: usize, col: usize, mark: Mark) {
         if self.state != GameState::Playing {
             panic!("Error: tried making a move on a compeleted board.");
@@ -156,7 +169,6 @@ impl Board {
         if self.get(row, col).is_some() {
             panic!("Error: tried making a move on an occupied position.");
         }
-
         self.set(row, col, Some(mark));
         self.check_complete();
         self.check_win();
@@ -309,5 +321,82 @@ mod tests {
         board.set(1, 1, Some(Mark::X));
         assert_eq!(board.check_complete(), true);
         assert_eq!(board.state, GameState::Draw);
+    }
+
+    #[test]
+    fn test_make_move_win() {
+        let mut board = Board::new();
+
+        // Create a winning row for X
+        board.make_move(0, 0, Mark::X);
+        board.make_move(1, 0, Mark::O);
+        board.make_move(0, 1, Mark::X);
+        board.make_move(1, 1, Mark::O);
+        board.make_move(0, 2, Mark::X);
+
+        assert_eq!(board.state, GameState::Won(Mark::X));
+    }
+
+    #[test]
+    fn test_make_move_draw() {
+        let mut board = Board::new();
+
+        // Create a draw scenario
+        board.make_move(0, 0, Mark::X);
+        board.make_move(0, 1, Mark::O);
+        board.make_move(0, 2, Mark::X);
+        board.make_move(1, 0, Mark::X);
+        board.make_move(1, 1, Mark::O);
+        board.make_move(1, 2, Mark::O);
+        board.make_move(2, 0, Mark::O);
+        board.make_move(2, 1, Mark::X);
+        board.make_move(2, 2, Mark::X);
+
+        assert_eq!(board.state, GameState::Draw);
+    }
+
+    #[test]
+    #[should_panic(expected = "tried making a move on an occupied position")]
+    fn test_make_move_occupied_position() {
+        let mut board = Board::new();
+
+        board.make_move(0, 0, Mark::X);
+        board.make_move(0, 0, Mark::O); // Should panic
+    }
+
+    #[test]
+    #[should_panic(expected = "tried making a move on a compeleted board")]
+    fn test_make_move_on_won_board() {
+        let mut board = Board::new();
+
+        // Create a winning scenario
+        board.make_move(0, 0, Mark::X);
+        board.make_move(1, 0, Mark::O);
+        board.make_move(0, 1, Mark::X);
+        board.make_move(1, 1, Mark::O);
+        board.make_move(0, 2, Mark::X);
+
+        // Try to make a move after game is won
+        board.make_move(2, 2, Mark::O); // Should panic
+    }
+
+    #[test]
+    #[should_panic(expected = "tried making a move on a compeleted board")]
+    fn test_make_move_on_draw_board() {
+        let mut board = Board::new();
+
+        // Create a draw scenario
+        board.make_move(0, 0, Mark::X);
+        board.make_move(0, 1, Mark::O);
+        board.make_move(0, 2, Mark::X);
+        board.make_move(1, 0, Mark::X);
+        board.make_move(1, 1, Mark::O);
+        board.make_move(1, 2, Mark::O);
+        board.make_move(2, 0, Mark::O);
+        board.make_move(2, 1, Mark::X);
+        board.make_move(2, 2, Mark::X);
+
+        // Try to make a move after draw
+        board.make_move(0, 0, Mark::X);
     }
 }
