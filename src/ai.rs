@@ -1,5 +1,5 @@
-use crate::game::Mark;
 use crate::game::base::Board;
+use crate::game::{GameState, Mark};
 use rand::prelude::*;
 use std::vec::Vec;
 
@@ -55,26 +55,22 @@ impl SimpleAi {
 
         // check for available wins
         for &(row, col) in available.iter() {
-            board.set(row, col, Some(self.ai_mark));
-            match board.check_win() {
-                Some(_) => {
-                    return (row, col);
-                }
-                _ => {}
-            };
+            board.make_move(row, col, self.ai_mark);
+            if board.state == GameState::Won(self.ai_mark) {
+                return (row, col);
+            }
             board.set(row, col, None);
+            board.state = GameState::Playing;
         }
 
         // check for possible losses
         for &(row, col) in available.iter() {
-            board.set(row, col, Some(self.player_mark));
-            match board.check_win() {
-                Some(_) => {
-                    return (row, col);
-                }
-                _ => {}
-            };
+            board.make_move(row, col, self.player_mark);
+            if board.state == GameState::Won(self.player_mark) {
+                return (row, col);
+            }
             board.set(row, col, None);
+            board.state = GameState::Playing;
         }
 
         // move at random

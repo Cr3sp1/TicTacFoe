@@ -213,32 +213,17 @@ impl GamePlay {
     /// If the game is over or the cell is occupied, does nothing.
     /// After a valid move, checks for win/draw conditions and switches players.
     /// In PvE mode, triggers the AI to make its move.
-    pub fn make_move(&mut self) {
+    pub fn player_move(&mut self) {
         if self.board.state != GameState::Playing {
             return;
         }
 
-        if self
-            .board
-            .get(self.selected_row, self.selected_col)
-            .is_some()
-        {
-            return;
-        }
-
-        self.board.set(
-            self.selected_row,
-            self.selected_col,
-            Some(self.active_player),
-        );
+        self.board
+            .make_move(self.selected_row, self.selected_col, self.active_player);
 
         self.turn += 1;
 
-        if let Some(_) = self.board.check_win() {
-            return;
-        }
-
-        if self.board.check_draw() {
+        if self.board.state != GameState::Playing {
             return;
         }
 
@@ -258,15 +243,7 @@ impl GamePlay {
     fn ai_play(&mut self) {
         if let Some(ai) = &self.ai {
             let (ai_row, ai_col) = ai.choose_move(self.board.clone());
-            self.board.set(ai_row, ai_col, Some(ai.ai_mark));
-
-            if let Some(_) = self.board.check_win() {
-                return;
-            }
-
-            if self.board.check_draw() {
-                return;
-            }
+            self.board.make_move(ai_row, ai_col, ai.ai_mark);
 
             self.active_player = match ai.ai_mark {
                 Mark::X => Mark::O,
@@ -276,6 +253,8 @@ impl GamePlay {
             self.turn += 1;
 
             self.reset_position();
+        } else {
+            panic!("Error: no AI is available.");
         }
     }
 
@@ -365,9 +344,9 @@ mod tests {
     }
 
     #[test]
-    fn test_make_move_places_mark() {
+    fn test_player_move_places_mark() {
         let mut game = GamePlay::new(GameMode::LocalPvP);
-        game.make_move();
+        game.player_move();
 
         assert!(game.board.get(0, 0).is_some());
         assert_eq!(game.board.get(0, 0).unwrap(), Mark::X);
@@ -375,41 +354,28 @@ mod tests {
     }
 
     #[test]
-    fn test_make_move_switches_player() {
+    fn test_player_move_switches_player() {
         let mut game = GamePlay::new(GameMode::LocalPvP);
         assert_eq!(game.active_player, Mark::X);
 
-        game.make_move();
+        game.player_move();
         assert_eq!(game.active_player, Mark::O);
 
         game.input_right();
-        game.make_move();
+        game.player_move();
         assert_eq!(game.active_player, Mark::X);
     }
 
     #[test]
-    fn test_make_move_ignores_occupied_cell() {
-        let mut game = GamePlay::new(GameMode::LocalPvP);
-        game.make_move();
-        let turn_before = game.turn;
-
-        game.selected_row = 0;
-        game.selected_col = 0;
-        game.make_move();
-
-        assert_eq!(game.turn, turn_before);
-    }
-
-    #[test]
-    fn test_make_move_detects_win() {
+    fn test_player_move_detects_win() {
         let mut game = GamePlay::new(GameMode::LocalPvP);
         // Set up winning position for X
-        game.board.set(0, 0, Some(Mark::X));
-        game.board.set(0, 1, Some(Mark::X));
+        game.board.make_move(0, 0, Mark::X);
+        game.board.make_move(0, 1, Mark::X);
         game.selected_row = 0;
         game.selected_col = 2;
 
-        game.make_move();
+        game.player_move();
 
         assert_eq!(game.board.state, GameState::Won(Mark::X));
     }
@@ -417,9 +383,9 @@ mod tests {
     #[test]
     fn test_reset_game() {
         let mut game = GamePlay::new(GameMode::LocalPvP);
-        game.make_move();
+        game.player_move();
         game.input_right();
-        game.make_move();
+        game.player_move();
 
         game.reset_game();
 

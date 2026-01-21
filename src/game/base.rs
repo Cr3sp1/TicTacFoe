@@ -113,7 +113,7 @@ impl Board {
     ///
     /// Returns the winning mark if any winning condition is met, or None if
     /// there is no winner yet.
-    pub fn check_win(&mut self) -> Option<Mark> {
+    fn check_win(&mut self) -> Option<Mark> {
         if let Some(mark) = self.check_diag_dexter() {
             self.state = GameState::Won(mark);
             return Some(mark);
@@ -139,7 +139,7 @@ impl Board {
     /// Checks if all cells on the board are filled.
     ///
     /// Returns true if every cell contains a mark, false otherwise.
-    pub fn check_draw(&mut self) -> bool {
+    fn check_complete(&mut self) -> bool {
         for i in 0..9 {
             if self.cells[i].is_none() {
                 return false;
@@ -147,6 +147,19 @@ impl Board {
         }
         self.state = GameState::Draw;
         true
+    }
+
+    pub fn make_move(&mut self, row: usize, col: usize, mark: Mark) {
+        if self.state != GameState::Playing {
+            panic!("Error: tried making a move on a compeleted board.");
+        }
+        if self.get(row, col).is_some() {
+            panic!("Error: tried making a move on an occupied position.");
+        }
+
+        self.set(row, col, Some(mark));
+        self.check_complete();
+        self.check_win();
     }
 }
 
@@ -285,16 +298,16 @@ mod tests {
     #[test]
     fn test_check_draw() {
         let mut board = Board::new();
-        assert_eq!(board.check_draw(), false);
+        assert_eq!(board.check_complete(), false);
 
         board.set_row(0, [Some(Mark::X), Some(Mark::O), Some(Mark::O)]);
         board.set_row(1, [Some(Mark::X), None, Some(Mark::X)]);
         board.set_row(2, [Some(Mark::O), Some(Mark::O), Some(Mark::X)]);
-        assert_eq!(board.check_draw(), false);
+        assert_eq!(board.check_complete(), false);
         assert_eq!(board.state, GameState::Playing);
 
         board.set(1, 1, Some(Mark::X));
-        assert_eq!(board.check_draw(), true);
+        assert_eq!(board.check_complete(), true);
         assert_eq!(board.state, GameState::Draw);
     }
 }

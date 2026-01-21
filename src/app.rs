@@ -79,7 +79,7 @@ impl App {
                 "Quit" => self.should_quit = true,
                 _ => panic!("Option selected in Main Menu does not exist."),
             },
-            CurrentScreen::Playing(game) => game.make_move(),
+            CurrentScreen::Playing(game) => game.player_move(),
         }
     }
 
@@ -179,7 +179,7 @@ mod tests {
 
         // Make a move
         if let CurrentScreen::Playing(game) = &mut app.current_screen {
-            game.make_move();
+            game.player_move();
             assert!(game.turn > 0);
             assert!(game.board.get(0, 0).is_some());
         }
