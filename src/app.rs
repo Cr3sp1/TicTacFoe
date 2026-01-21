@@ -116,6 +116,7 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::game::Board;
 
     #[test]
     fn test_app_new_starts_at_menu() {

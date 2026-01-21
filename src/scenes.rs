@@ -1,6 +1,6 @@
 use crate::ai::SimpleAi;
-use crate::game::base::Board;
-use crate::game::{GameState, Mark};
+use crate::game::base::SmallBoard;
+use crate::game::{Board, GameState, Mark};
 
 /// Represents the game mode selection.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -46,7 +46,7 @@ impl MainMenu {
 
 /// Main gameplay scene containing the board state and game logic.
 pub struct GamePlay {
-    pub board: Board,
+    pub board: SmallBoard,
     pub active_player: Mark,
     pub turn: u32,
     pub mode: GameMode,
@@ -67,7 +67,7 @@ impl GamePlay {
         };
 
         Self {
-            board: Board::new(),
+            board: SmallBoard::new(),
             active_player: Mark::X,
             turn: 0,
             mode,
@@ -282,7 +282,7 @@ impl GamePlay {
 
     /// Resets the game to initial state while keeping the same mode.
     pub fn reset_game(&mut self) {
-        self.board = Board::new();
+        self.board = SmallBoard::new();
         self.active_player = Mark::X;
         self.turn = 0;
         self.selected_row = 0;
