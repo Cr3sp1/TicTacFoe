@@ -1,6 +1,6 @@
-use crate::app::{App, CurrentScreen};
+use crate::app::App;
 use crate::game::{Board, GameState, Mark};
-use crate::scenes::{GameMode, GamePlay, MainMenu};
+use crate::scenes::{GameMode, GamePlay, Menu, Scene};
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -11,14 +11,14 @@ use ratatui::{
 
 /// Main render function that delegates to the appropriate screen renderer.
 pub fn render(f: &mut Frame, app: &App) {
-    match &app.current_screen {
-        CurrentScreen::MainMenu(menu) => render_main_menu(f, menu),
-        CurrentScreen::Playing(game) => render_game(f, game),
+    match &app.current_scene {
+        Scene::MainMenu(menu) | Scene::TTTMenu(menu) | Scene::UTTMenu(menu) => render_menu(f, menu),
+        Scene::Playing(game) => render_game(f, game),
     }
 }
 
-/// Renders the main menu screen with game mode options.
-fn render_main_menu(f: &mut Frame, menu: &MainMenu) {
+/// Renders a menu screen with game mode options.
+fn render_menu(f: &mut Frame, menu: &Menu) {
     if render_size_warning(f, 10, 10) {
         return;
     }
@@ -77,7 +77,7 @@ fn render_title(f: &mut Frame, area: Rect) {
 }
 
 /// Renders the menu options with highlighting for the selected option.
-fn render_menu_options(f: &mut Frame, area: Rect, menu: &MainMenu) {
+fn render_menu_options(f: &mut Frame, area: Rect, menu: &Menu) {
     let options_area = center_rect(area, 25, 9);
 
     let mut lines = vec![Line::from("")];

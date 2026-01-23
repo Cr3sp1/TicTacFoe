@@ -2,6 +2,18 @@ use crate::ai::SimpleAi;
 use crate::game::base::SmallBoard;
 use crate::game::{Board, GameState, Mark};
 
+pub const MAIN_MENU_OPTIONS: [&'static str; 3] = ["Ultimate Tic Tac Toe", "Tic Tac Toe", "Quit"];
+pub const TTT_MENU_OPTIONS: [&'static str; 3] = ["Local PvP", "Play vs AI", "Back"];
+pub const UTT_MENU_OPTIONS: [&'static str; 1] = ["Back"];
+
+/// Represents all the possible scenes.
+pub enum Scene {
+    MainMenu(Menu),
+    TTTMenu(Menu),
+    UTTMenu(Menu),
+    Playing(GamePlay),
+}
+
 /// Represents the game mode selection.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum GameMode {
@@ -9,18 +21,18 @@ pub enum GameMode {
     LocalPvP,
 }
 
-/// Main menu scene with selectable options.
-pub struct MainMenu {
+/// Menu scene with selectable options.
+pub struct Menu {
     pub selected_option: usize,
     pub options: Vec<&'static str>,
 }
 
-impl MainMenu {
-    /// Creates a new main menu with default options.
-    pub fn new() -> Self {
+impl Menu {
+    /// Creates a new menu.
+    pub fn new(options: Vec<&'static str>) -> Self {
         Self {
             selected_option: 0,
-            options: vec!["Local PvP", "Play vs AI", "Quit"],
+            options,
         }
     }
 
@@ -296,31 +308,31 @@ mod tests {
 
     #[test]
     fn test_main_menu_new() {
-        let menu = MainMenu::new();
+        let menu = Menu::new(TTT_MENU_OPTIONS.to_vec());
         assert_eq!(menu.selected_option, 0);
         assert_eq!(menu.options.len(), 3);
         assert_eq!(menu.get_selected(), "Local PvP");
     }
 
     #[test]
-    fn test_main_menu_move_down() {
-        let mut menu = MainMenu::new();
+    fn test_menu_move_down() {
+        let mut menu = Menu::new(TTT_MENU_OPTIONS.to_vec());
         menu.move_down();
         assert_eq!(menu.selected_option, 1);
         assert_eq!(menu.get_selected(), "Play vs AI");
     }
 
     #[test]
-    fn test_main_menu_move_up_wraps() {
-        let mut menu = MainMenu::new();
+    fn test_menu_move_up_wraps() {
+        let mut menu = Menu::new(MAIN_MENU_OPTIONS.to_vec());
         menu.move_up();
         assert_eq!(menu.selected_option, 2);
         assert_eq!(menu.get_selected(), "Quit");
     }
 
     #[test]
-    fn test_main_menu_move_down_wraps() {
-        let mut menu = MainMenu::new();
+    fn test_menu_move_down_wraps() {
+        let mut menu = Menu::new(TTT_MENU_OPTIONS.to_vec());
         menu.selected_option = 2;
         menu.move_down();
         assert_eq!(menu.selected_option, 0);
