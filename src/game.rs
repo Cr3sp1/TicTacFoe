@@ -43,6 +43,16 @@ pub trait Board {
     /// # Returns
     /// The mark at the position, or None if the cell is empty.
     fn get(&self, row: usize, col: usize) -> Option<Mark>;
+
+    /// Gets whether it is possible to play in the specified position.
+    ///
+    /// # Arguments
+    /// * `row` - Row index (0-2)
+    /// * `col` - Column index (0-2)
+    ///
+    /// # Returns
+    /// True if the position is playable, else False.
+    fn is_playable(&self, row: usize, col: usize) -> bool;
 }
 
 /// Checks if the specified row has three matching marks.
@@ -146,6 +156,21 @@ pub fn check_win(board: &impl Board) -> Option<Mark> {
     }
 
     None
+}
+
+/// Checks if all cells on the board are filled.
+///
+/// # Returns
+/// True if at least one cell is playable, else False.
+pub fn check_complete(board: &impl Board) -> bool {
+    for row in 0..3 {
+        for col in 0..3 {
+            if board.is_playable(row, col) {
+                return false;
+            }
+        }
+    }
+    true
 }
 
 #[cfg(test)]

@@ -147,6 +147,18 @@ impl Board for BigBoard {
             None
         }
     }
+
+    /// Gets whether it is possible to play in the specified position.
+    ///
+    /// # Arguments
+    /// * `row` - Row index (0-2)
+    /// * `col` - Column index (0-2)
+    ///
+    /// # Returns
+    /// True if the board is not complete, else False.
+    fn is_playable(&self, row: usize, col: usize) -> bool {
+        self.get_board(row, col).state == GameState::Playing
+    }
 }
 
 #[cfg(test)]

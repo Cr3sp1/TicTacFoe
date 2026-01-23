@@ -1,6 +1,10 @@
 use crate::ai::SimpleAi;
 use crate::game::base::SmallBoard;
-use crate::game::{Board, GameState, Mark};
+use crate::game::{GameState, Mark};
+use crate::utils::{
+    Position, move_selection_down_playable, move_selection_left_playable,
+    move_selection_right_playable, move_selection_up_playable, reset_position,
+};
 
 pub const MAIN_MENU_OPTIONS: [&'static str; 3] = ["Ultimate Tic Tac Toe", "Tic Tac Toe", "Quit"];
 pub const TTT_MENU_OPTIONS: [&'static str; 3] = ["Local PvP", "Play vs AI", "Back"];
@@ -62,8 +66,7 @@ pub struct GamePlay {
     pub active_player: Mark,
     pub turn: u32,
     pub mode: GameMode,
-    pub selected_row: usize,
-    pub selected_col: usize,
+    pub selected: Position,
     pub ai: Option<SimpleAi>,
 }
 
@@ -83,8 +86,7 @@ impl GamePlay {
             active_player: Mark::X,
             turn: 0,
             mode,
-            selected_row: 0,
-            selected_col: 0,
+            selected: Position { row: 0, col: 0 },
             ai,
         }
     }
@@ -92,132 +94,25 @@ impl GamePlay {
     /// Moves selection left, wrapping to the rightmost column and finding
     /// the next available cell if the target is occupied.
     pub fn input_left(&mut self) {
-        for _ in 0..3 {
-            self.move_selection_left();
-            let original_row = self.selected_row;
-
-            for _ in 0..3 {
-                if self
-                    .board
-                    .get(self.selected_row, self.selected_col)
-                    .is_none()
-                {
-                    return;
-                }
-                match original_row {
-                    0 => self.move_selection_down(),
-                    2 => self.move_selection_up(),
-                    _ => self.move_selection_up(),
-                }
-            }
-        }
+        move_selection_left_playable(&self.board, &mut self.selected);
     }
 
     /// Moves selection right, wrapping to the leftmost column and finding
     /// the next available cell if the target is occupied.
     pub fn input_right(&mut self) {
-        for _ in 0..3 {
-            self.move_selection_right();
-            let original_row = self.selected_row;
-
-            for _ in 0..3 {
-                if self
-                    .board
-                    .get(self.selected_row, self.selected_col)
-                    .is_none()
-                {
-                    return;
-                }
-                match original_row {
-                    0 => self.move_selection_down(),
-                    2 => self.move_selection_up(),
-                    _ => self.move_selection_down(),
-                }
-            }
-        }
+        move_selection_right_playable(&self.board, &mut self.selected);
     }
 
     /// Moves selection up, wrapping to the bottom row and finding
     /// the next available cell if the target is occupied.
     pub fn input_up(&mut self) {
-        for _ in 0..3 {
-            self.move_selection_up();
-            let original_col = self.selected_col;
-
-            for _ in 0..3 {
-                if self
-                    .board
-                    .get(self.selected_row, self.selected_col)
-                    .is_none()
-                {
-                    return;
-                }
-                match original_col {
-                    0 => self.move_selection_right(),
-                    2 => self.move_selection_left(),
-                    _ => self.move_selection_left(),
-                }
-            }
-        }
+        move_selection_up_playable(&self.board, &mut self.selected);
     }
 
     /// Moves selection down, wrapping to the top row and finding
     /// the next available cell if the target is occupied.
     pub fn input_down(&mut self) {
-        for _ in 0..3 {
-            self.move_selection_down();
-            let original_col = self.selected_col;
-
-            for _ in 0..3 {
-                if self
-                    .board
-                    .get(self.selected_row, self.selected_col)
-                    .is_none()
-                {
-                    return;
-                }
-                match original_col {
-                    0 => self.move_selection_right(),
-                    2 => self.move_selection_left(),
-                    _ => self.move_selection_right(),
-                }
-            }
-        }
-    }
-
-    fn move_selection_left(&mut self) {
-        if self.selected_col > 0 {
-            self.selected_col -= 1;
-        } else {
-            self.selected_col = 2;
-        }
-    }
-
-    fn move_selection_right(&mut self) {
-        self.selected_col = (self.selected_col + 1) % 3;
-    }
-
-    fn move_selection_up(&mut self) {
-        if self.selected_row > 0 {
-            self.selected_row -= 1;
-        } else {
-            self.selected_row = 2;
-        }
-    }
-
-    fn move_selection_down(&mut self) {
-        self.selected_row = (self.selected_row + 1) % 3;
-    }
-
-    fn move_selection_next_available(&mut self) {
-        self.selected_col += 1;
-        if self.selected_col >= 3 {
-            self.selected_col = 0;
-            self.selected_row += 1;
-            if self.selected_row >= 3 {
-                self.selected_row = 0;
-            }
-        }
+        move_selection_down_playable(&self.board, &mut self.selected);
     }
 
     /// Attempts to make a move at the currently selected position.
@@ -231,7 +126,7 @@ impl GamePlay {
         }
 
         self.board
-            .make_move(self.selected_row, self.selected_col, self.active_player);
+            .make_move(self.selected.row, self.selected.col, self.active_player);
 
         self.turn += 1;
 
@@ -248,7 +143,7 @@ impl GamePlay {
             self.ai_play();
         }
 
-        self.reset_position();
+        reset_position(&self.board, &mut self.selected);
     }
 
     /// Executes the AI's turn in PvE mode.
@@ -264,7 +159,7 @@ impl GamePlay {
 
             self.turn += 1;
 
-            self.reset_position();
+            reset_position(&self.board, &mut self.selected);
         } else {
             panic!("Error: no AI is available.");
         }
@@ -277,34 +172,20 @@ impl GamePlay {
         }
     }
 
-    /// Resets the selected position to the first available cell.
-    fn reset_position(&mut self) {
-        if self.board.state == GameState::Draw {
-            return;
-        }
-        (self.selected_row, self.selected_col) = (0, 0);
-        while self
-            .board
-            .get(self.selected_row, self.selected_col)
-            .is_some()
-        {
-            self.move_selection_next_available();
-        }
-    }
-
     /// Resets the game to initial state while keeping the same mode.
     pub fn reset_game(&mut self) {
         self.board = SmallBoard::new();
         self.active_player = Mark::X;
         self.turn = 0;
-        self.selected_row = 0;
-        self.selected_col = 0;
+        self.selected.row = 0;
+        self.selected.col = 0;
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::game::Board;
 
     #[test]
     fn test_main_menu_new() {
@@ -384,8 +265,8 @@ mod tests {
         // Set up winning position for X
         game.board.make_move(0, 0, Mark::X);
         game.board.make_move(0, 1, Mark::X);
-        game.selected_row = 0;
-        game.selected_col = 2;
+        game.selected.row = 0;
+        game.selected.col = 2;
 
         game.player_move();
 
@@ -410,24 +291,24 @@ mod tests {
     #[test]
     fn test_selection_wraps_horizontally() {
         let mut game = GamePlay::new(GameMode::LocalPvP);
-        game.selected_col = 2;
+        game.selected.col = 2;
 
-        game.move_selection_right();
-        assert_eq!(game.selected_col, 0);
+        game.input_right();
+        assert_eq!(game.selected.col, 0);
 
-        game.move_selection_left();
-        assert_eq!(game.selected_col, 2);
+        game.input_left();
+        assert_eq!(game.selected.col, 2);
     }
 
     #[test]
     fn test_selection_wraps_vertically() {
         let mut game = GamePlay::new(GameMode::LocalPvP);
-        game.selected_row = 2;
+        game.selected.row = 2;
 
-        game.move_selection_down();
-        assert_eq!(game.selected_row, 0);
+        game.input_down();
+        assert_eq!(game.selected.row, 0);
 
-        game.move_selection_up();
-        assert_eq!(game.selected_row, 2);
+        game.input_up();
+        assert_eq!(game.selected.row, 2);
     }
 }

@@ -36,21 +36,6 @@ impl SmallBoard {
         self.cells[row * 3 + col] = mark;
     }
 
-    /// Checks if all cells on the board are filled.
-    ///
-    /// # Returns
-    /// True if every cell contains a mark, false otherwise.
-    pub fn check_complete(&self) -> bool {
-        for row in 0..3 {
-            for col in 0..3 {
-                if self.get(row, col).is_none() {
-                    return false;
-                }
-            }
-        }
-        true
-    }
-
     /// Makes a move on the board at the specified position.
     ///
     /// Places the given mark at the specified row and column, then checks
@@ -72,7 +57,7 @@ impl SmallBoard {
             panic!("Error: tried making a move on an occupied position.");
         }
         self.set(row, col, Some(mark));
-        if self.check_complete() {
+        if check_complete(self) {
             self.state = GameState::Draw;
         }
         if let Some(mark) = check_win(self) {
@@ -95,6 +80,18 @@ impl Board for SmallBoard {
             panic!("Tried to access board position ({row}, {col}) which is out of bounds.");
         }
         self.cells[row * 3 + col]
+    }
+
+    /// Gets whether it is possible to play in the specified position.
+    ///
+    /// # Arguments
+    /// * `row` - Row index (0-2)
+    /// * `col` - Column index (0-2)
+    ///
+    /// # Returns
+    /// True if the cell is empty, else False.
+    fn is_playable(&self, row: usize, col: usize) -> bool {
+        self.get(row, col) == None
     }
 }
 
@@ -143,15 +140,15 @@ mod tests {
     #[test]
     fn test_check_complete() {
         let mut board = SmallBoard::new();
-        assert_eq!(board.check_complete(), false);
+        assert_eq!(check_complete(&board), false);
 
         board.set_row(0, [Some(Mark::X), Some(Mark::O), Some(Mark::O)]);
         board.set_row(1, [Some(Mark::X), None, Some(Mark::X)]);
         board.set_row(2, [Some(Mark::O), Some(Mark::O), Some(Mark::X)]);
-        assert_eq!(board.check_complete(), false);
+        assert_eq!(check_complete(&board), false);
 
         board.set(1, 1, Some(Mark::X));
-        assert_eq!(board.check_complete(), true);
+        assert_eq!(check_complete(&board), true);
     }
 
     #[test]

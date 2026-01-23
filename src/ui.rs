@@ -210,8 +210,8 @@ fn render_board(f: &mut Frame, area: Rect, game: &GamePlay) {
                 None => " ",
             };
 
-            let style = if row == game.selected_row
-                && col == game.selected_col
+            let style = if row == game.selected.row
+                && col == game.selected.col
                 && game.board.state == GameState::Playing
             {
                 cell_content = match game.active_player {
