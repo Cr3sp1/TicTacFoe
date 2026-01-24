@@ -24,25 +24,27 @@ impl BigBoard {
     /// Gets a reference to the small board at the specified position.
     ///
     /// # Arguments
-    /// * `big_row` - Row index of the small board (0-2)
-    /// * `big_col` - Column index of the small board (0-2)
+    /// * `board_row` - Row index of the small board (0-2)
+    /// * `board_col` - Column index of the small board (0-2)
     ///
     /// # Panics
-    /// Panics if big_row or big_col is greater than 3.
-    fn get_board(&self, big_row: usize, big_col: usize) -> &SmallBoard {
-        if big_row > 3 || big_col > 3 {
-            panic!("Error: tried to access board({big_row}, {big_col}) which is out of bounds.");
+    /// Panics if board_row or board_col is greater than 3.
+    pub fn get_board(&self, board_row: usize, board_col: usize) -> &SmallBoard {
+        if board_row > 3 || board_col > 3 {
+            panic!(
+                "Error: tried to access board({board_row}, {board_col}) which is out of bounds."
+            );
         }
-        &self.boards[big_row * 3 + big_col]
+        &self.boards[board_row * 3 + board_col]
     }
 
     /// Gets the mark at the specified position within a specific small board.
     ///
     /// # Arguments
-    /// * `big_row` - Row index of the small board (0-2)
-    /// * `big_col` - Column index of the small board (0-2)
-    /// * `small_row` - Row index within the small board (0-2)
-    /// * `small_col` - Column index within the small board (0-2)
+    /// * `board_row` - Row index of the small board (0-2)
+    /// * `board_col` - Column index of the small board (0-2)
+    /// * `cell_row` - Row index within the small board (0-2)
+    /// * `cell_col` - Column index within the small board (0-2)
     ///
     /// # Returns
     /// The mark at the specified position, or None if the cell is empty.
@@ -51,12 +53,12 @@ impl BigBoard {
     /// Panics if any index is greater than 3.
     pub fn get(
         &mut self,
-        big_row: usize,
-        big_col: usize,
-        small_row: usize,
-        small_col: usize,
+        board_row: usize,
+        board_col: usize,
+        cell_row: usize,
+        cell_col: usize,
     ) -> Option<Mark> {
-        self.get_board(big_row, big_col).get(small_row, small_col)
+        self.get_board(board_row, board_col).get(cell_row, cell_col)
     }
 
     /// Checks if all small boards are either won or complete (draw).
@@ -64,9 +66,9 @@ impl BigBoard {
     /// # Returns
     /// True if every small board's state is not GameState::Playing, false otherwise.
     pub fn check_complete(&self) -> bool {
-        for big_row in 0..3 {
-            for big_col in 0..3 {
-                if self.boards[big_row * 3 + big_col].state == GameState::Playing {
+        for board_row in 0..3 {
+            for board_col in 0..3 {
+                if self.boards[board_row * 3 + board_col].state == GameState::Playing {
                     return false;
                 }
             }
@@ -81,10 +83,10 @@ impl BigBoard {
     /// and updates the game state accordingly.
     ///
     /// # Arguments
-    /// * `big_row` - Row index of the small board (0-2)
-    /// * `big_col` - Column index of the small board (0-2)
-    /// * `small_row` - Row index within the small board (0-2)
-    /// * `small_col` - Column index within the small board (0-2)
+    /// * `board_row` - Row index of the small board (0-2)
+    /// * `board_col` - Column index of the small board (0-2)
+    /// * `cell_row` - Row index within the small board (0-2)
+    /// * `cell_col` - Column index within the small board (0-2)
     /// * `mark` - The mark to place (Mark::X or Mark::O)
     ///
     /// # Panics
@@ -93,22 +95,22 @@ impl BigBoard {
     /// * Panics if the specified position is already occupied (delegated to SmallBoard::make_move)
     pub fn make_move(
         &mut self,
-        big_row: usize,
-        big_col: usize,
-        small_row: usize,
-        small_col: usize,
+        board_row: usize,
+        board_col: usize,
+        cell_row: usize,
+        cell_col: usize,
         mark: Mark,
     ) {
         if self.state != GameState::Playing {
             panic!("Error: tried making a move on a compeleted big board.");
         }
         if let Some(active_board) = self.active_board {
-            if (big_row, big_col) != active_board {
+            if (board_row, board_col) != active_board {
                 panic!("Error: tried making a move on a board different than the active board.");
             }
         }
 
-        self.boards[big_row * 3 + big_col].make_move(small_row, small_col, mark);
+        self.boards[board_row * 3 + board_col].make_move(cell_row, cell_col, mark);
         if self.check_complete() {
             self.state = GameState::Draw;
         }
@@ -116,8 +118,8 @@ impl BigBoard {
             self.state = GameState::Won(mark);
         };
 
-        self.active_board = match self.get_board(small_row, small_col).state {
-            GameState::Playing => Some((small_row, small_col)),
+        self.active_board = match self.get_board(cell_row, cell_col).state {
+            GameState::Playing => Some((cell_row, cell_col)),
             _ => None,
         }
     }
@@ -131,17 +133,17 @@ impl Board for BigBoard {
     /// been won, or None if the board is still in play or ended in a draw.
     ///
     /// # Arguments
-    /// * `big_row` - Row index of the small board (0-2)
-    /// * `big_col` - Column index of the small board (0-2)
+    /// * `board_row` - Row index of the small board (0-2)
+    /// * `board_col` - Column index of the small board (0-2)
     ///
     /// # Returns
     /// The winning mark if the small board at this position has been won,
     /// or None if it's still playing or ended in a draw.
     ///
     /// # Panics
-    /// Panics if big_row or big_col is greater than 3.
-    fn get(&self, big_row: usize, big_col: usize) -> Option<Mark> {
-        if let GameState::Won(mark) = self.get_board(big_row, big_col).state {
+    /// Panics if board_row or board_col is greater than 3.
+    fn get(&self, board_row: usize, board_col: usize) -> Option<Mark> {
+        if let GameState::Won(mark) = self.get_board(board_row, board_col).state {
             Some(mark)
         } else {
             None
@@ -194,7 +196,7 @@ mod tests {
     }
 
     #[test]
-    fn test_make_move_win_big_board() {
+    fn test_make_move_win_board_board() {
         let mut board = BigBoard::new();
 
         // Play a couple moves
@@ -234,7 +236,7 @@ mod tests {
     }
 
     #[test]
-    fn test_make_move_draw_big_board() {
+    fn test_make_move_draw_board_board() {
         let mut board = BigBoard::new();
 
         // Create a scenario where all boards are complete but no one wins

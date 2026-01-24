@@ -1,5 +1,6 @@
 use crate::ai::SimpleAi;
 use crate::game::base::SmallBoard;
+use crate::game::ultimate::BigBoard;
 use crate::game::{GameState, Mark};
 use crate::utils::{
     Position, move_selection_down_playable, move_selection_left_playable,
@@ -15,7 +16,8 @@ pub enum Scene {
     MainMenu(Menu),
     TTTMenu(Menu),
     UTTMenu(Menu),
-    Playing(GamePlay),
+    PlayingTTT(GamePlayTTT),
+    // PlayingUTT(GamePlayUTT),
 }
 
 /// Represents the game mode selection.
@@ -60,8 +62,8 @@ impl Menu {
     }
 }
 
-/// Main gameplay scene containing the board state and game logic.
-pub struct GamePlay {
+/// Main tic-tac-toe gameplay scene containing the board state and game logic.
+pub struct GamePlayTTT {
     pub board: SmallBoard,
     pub active_player: Mark,
     pub turn: u32,
@@ -70,7 +72,7 @@ pub struct GamePlay {
     pub ai: Option<SimpleAi>,
 }
 
-impl GamePlay {
+impl GamePlayTTT {
     /// Creates a new game with the specified mode.
     ///
     /// For PvE mode, initializes an AI opponent playing as O.
@@ -182,6 +184,140 @@ impl GamePlay {
     }
 }
 
+/// Main tic-tac-toe gameplay scene containing the board state and game logic.
+pub struct GamePlayUTT {
+    pub big_board: BigBoard,
+    pub active_player: Mark,
+    pub turn: u32,
+    pub mode: GameMode,
+    pub selected_board: Position,
+    pub selected_cell: Option<Position>,
+    // pub ai: Option<SimpleAi>,
+}
+
+impl GamePlayUTT {
+    /// Creates a new game with the specified mode.
+    ///
+    /// For PvE mode, initializes an AI opponent playing as O.
+    pub fn new(mode: GameMode) -> Self {
+        Self {
+            big_board: BigBoard::new(),
+            active_player: Mark::X,
+            turn: 0,
+            mode,
+            selected_board: Position { row: 0, col: 0 },
+            selected_cell: None,
+        }
+    }
+
+    /// Apply move function to selected cell if it exists, else apply it to selected board
+    fn input_move(
+        &mut self,
+        f_small: fn(&SmallBoard, &mut Position),
+        f_big: fn(&BigBoard, &mut Position),
+    ) {
+        let Self {
+            big_board,
+            selected_board,
+            selected_cell,
+            ..
+        } = self;
+        if let Some(cell) = selected_cell {
+            let selected_board = big_board.get_board(selected_board.row, selected_board.col);
+            f_small(selected_board, cell);
+        }
+
+        f_big(&self.big_board, &mut self.selected_board);
+    }
+
+    /// Moves selected cell left if it exists, else moves the selected board
+    pub fn input_left(&mut self) {
+        self.input_move(move_selection_left_playable, move_selection_left_playable);
+    }
+
+    /// Moves selected cell right if it exists, else moves the selected board
+    pub fn input_right(&mut self) {
+        self.input_move(move_selection_right_playable, move_selection_right_playable);
+    }
+
+    /// Moves selected cell up if it exists, else moves the selected board
+    pub fn input_up(&mut self) {
+        self.input_move(move_selection_up_playable, move_selection_up_playable);
+    }
+
+    /// Moves selected cell down if it exists, else moves the selected board
+    pub fn input_down(&mut self) {
+        self.input_move(move_selection_down_playable, move_selection_down_playable);
+    }
+
+    pub fn handle_enter(&mut self) {
+        if self.selected_cell.is_none() {
+            let mut cell_position = Position { row: 0, col: 0 };
+            let selected_board = self
+                .big_board
+                .get_board(self.selected_board.row, self.selected_board.col);
+            reset_position(selected_board, &mut cell_position);
+            self.selected_cell = Some(cell_position);
+        } else {
+            self.player_move();
+        }
+    }
+
+    /// Attempts to make a move at the currently selected board and cell.
+    ///
+    /// If the game is over does nothing. If there is no selected cell it panics.
+    /// After a valid move, checks for win/draw conditions and switches players.
+    /// In PvE mode, triggers the AI to make its move.
+    pub fn player_move(&mut self) {
+        if self.big_board.state != GameState::Playing {
+            return;
+        }
+
+        let selected_cell = self.selected_cell.as_mut().unwrap();
+        self.big_board.make_move(
+            self.selected_board.row,
+            self.selected_board.col,
+            selected_cell.row,
+            selected_cell.col,
+            self.active_player,
+        );
+
+        self.turn += 1;
+
+        if self.big_board.state != GameState::Playing {
+            return;
+        }
+
+        self.active_player = match self.active_player {
+            Mark::X => Mark::O,
+            Mark::O => Mark::X,
+        };
+
+        // If next action is constrained to active board, select it by default
+        if let Some((active_row, active_col)) = self.big_board.active_board {
+            self.selected_board = Position {
+                row: active_row,
+                col: active_col,
+            };
+            reset_position(
+                self.big_board.get_board(active_row, active_col),
+                selected_cell,
+            );
+        } else {
+            reset_position(&self.big_board, &mut self.selected_board)
+        }
+    }
+
+    /// Resets the game to initial state while keeping the same mode.
+    pub fn reset_game(&mut self) {
+        self.big_board = BigBoard::new();
+        self.active_player = Mark::X;
+        self.turn = 0;
+        self.selected_board = Position { row: 0, col: 0 };
+        self.selected_cell = None;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -221,7 +357,7 @@ mod tests {
 
     #[test]
     fn test_gameplay_new_pvp() {
-        let game = GamePlay::new(GameMode::LocalPvP);
+        let game = GamePlayTTT::new(GameMode::LocalPvP);
         assert_eq!(game.mode, GameMode::LocalPvP);
         assert_eq!(game.active_player, Mark::X);
         assert_eq!(game.board.state, GameState::Playing);
@@ -231,14 +367,14 @@ mod tests {
 
     #[test]
     fn test_gameplay_new_pve() {
-        let game = GamePlay::new(GameMode::PvE);
+        let game = GamePlayTTT::new(GameMode::PvE);
         assert_eq!(game.mode, GameMode::PvE);
         assert!(game.ai.is_some());
     }
 
     #[test]
     fn test_player_move_places_mark() {
-        let mut game = GamePlay::new(GameMode::LocalPvP);
+        let mut game = GamePlayTTT::new(GameMode::LocalPvP);
         game.player_move();
 
         assert!(game.board.get(0, 0).is_some());
@@ -248,7 +384,7 @@ mod tests {
 
     #[test]
     fn test_player_move_switches_player() {
-        let mut game = GamePlay::new(GameMode::LocalPvP);
+        let mut game = GamePlayTTT::new(GameMode::LocalPvP);
         assert_eq!(game.active_player, Mark::X);
 
         game.player_move();
@@ -261,7 +397,7 @@ mod tests {
 
     #[test]
     fn test_player_move_detects_win() {
-        let mut game = GamePlay::new(GameMode::LocalPvP);
+        let mut game = GamePlayTTT::new(GameMode::LocalPvP);
         // Set up winning position for X
         game.board.make_move(0, 0, Mark::X);
         game.board.make_move(0, 1, Mark::X);
@@ -275,7 +411,7 @@ mod tests {
 
     #[test]
     fn test_reset_game() {
-        let mut game = GamePlay::new(GameMode::LocalPvP);
+        let mut game = GamePlayTTT::new(GameMode::LocalPvP);
         game.player_move();
         game.input_right();
         game.player_move();
@@ -290,7 +426,7 @@ mod tests {
 
     #[test]
     fn test_selection_wraps_horizontally() {
-        let mut game = GamePlay::new(GameMode::LocalPvP);
+        let mut game = GamePlayTTT::new(GameMode::LocalPvP);
         game.selected.col = 2;
 
         game.input_right();
@@ -302,7 +438,7 @@ mod tests {
 
     #[test]
     fn test_selection_wraps_vertically() {
-        let mut game = GamePlay::new(GameMode::LocalPvP);
+        let mut game = GamePlayTTT::new(GameMode::LocalPvP);
         game.selected.row = 2;
 
         game.input_down();

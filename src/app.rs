@@ -1,5 +1,5 @@
 use crate::scenes::{
-    GameMode, GamePlay, MAIN_MENU_OPTIONS, Menu, Scene, TTT_MENU_OPTIONS, UTT_MENU_OPTIONS,
+    GameMode, GamePlayTTT, MAIN_MENU_OPTIONS, Menu, Scene, TTT_MENU_OPTIONS, UTT_MENU_OPTIONS,
 };
 
 /// Main application state manager.
@@ -26,7 +26,7 @@ impl App {
 
     /// Starts a new tic-tac-toe game with the specified mode.
     pub fn start_ttt_game(&mut self, mode: GameMode) {
-        self.current_scene = Scene::Playing(GamePlay::new(mode));
+        self.current_scene = Scene::PlayingTTT(GamePlayTTT::new(mode));
     }
 
     /// Goes to the main menu, discarding any active game.
@@ -46,14 +46,14 @@ impl App {
 
     /// Handles left arrow or 'h' key input.
     pub fn handle_left(&mut self) {
-        if let Scene::Playing(game) = &mut self.current_scene {
+        if let Scene::PlayingTTT(game) = &mut self.current_scene {
             game.input_left();
         }
     }
 
     /// Handles right arrow or 'l' key input.
     pub fn handle_right(&mut self) {
-        if let Scene::Playing(game) = &mut self.current_scene {
+        if let Scene::PlayingTTT(game) = &mut self.current_scene {
             game.input_right();
         }
     }
@@ -64,7 +64,7 @@ impl App {
     pub fn handle_up(&mut self) {
         match &mut self.current_scene {
             Scene::MainMenu(menu) | Scene::TTTMenu(menu) | Scene::UTTMenu(menu) => menu.move_up(),
-            Scene::Playing(game) => game.input_up(),
+            Scene::PlayingTTT(game) => game.input_up(),
         }
     }
 
@@ -74,7 +74,7 @@ impl App {
     pub fn handle_down(&mut self) {
         match &mut self.current_scene {
             Scene::MainMenu(menu) | Scene::TTTMenu(menu) | Scene::UTTMenu(menu) => menu.move_down(),
-            Scene::Playing(game) => game.input_down(),
+            Scene::PlayingTTT(game) => game.input_down(),
         }
     }
 
@@ -99,14 +99,14 @@ impl App {
                 "Back" => self.go_to_main_menu(),
                 _ => panic!("Option selected in Ultimate Tic Tac Toe Menu does not exist."),
             },
-            Scene::Playing(game) => game.player_move(),
+            Scene::PlayingTTT(game) => game.player_move(),
         }
     }
 
     /// Handles 's' key input to allow AI to play first in PvE mode.
     pub fn handle_second(&mut self) {
         match &mut self.current_scene {
-            Scene::Playing(game) => game.play_second(),
+            Scene::PlayingTTT(game) => game.play_second(),
             _ => {}
         }
     }
@@ -114,7 +114,7 @@ impl App {
     /// Handles 'r' key input to reset the current game.
     pub fn handle_reset(&mut self) {
         match &mut self.current_scene {
-            Scene::Playing(game) => game.reset_game(),
+            Scene::PlayingTTT(game) => game.reset_game(),
             _ => {}
         }
     }
@@ -122,7 +122,7 @@ impl App {
     /// Handles 'm' key input to return to main menu from game.
     pub fn handle_main_menu(&mut self) {
         match &mut self.current_scene {
-            Scene::Playing(_) => self.go_to_main_menu(),
+            Scene::PlayingTTT(_) => self.go_to_main_menu(),
             _ => {}
         }
     }
@@ -150,7 +150,7 @@ mod tests {
         let mut app = App::new();
         app.start_ttt_game(GameMode::LocalPvP);
 
-        assert!(matches!(app.current_scene, Scene::Playing(_)));
+        assert!(matches!(app.current_scene, Scene::PlayingTTT(_)));
     }
 
     #[test]
@@ -158,7 +158,7 @@ mod tests {
         let mut app = App::new();
         app.start_ttt_game(GameMode::PvE);
 
-        if let Scene::Playing(game) = &app.current_scene {
+        if let Scene::PlayingTTT(game) = &app.current_scene {
             assert_eq!(game.mode, GameMode::PvE);
             assert!(game.ai.is_some());
         } else {
@@ -191,7 +191,7 @@ mod tests {
         app.handle_enter();
         app.handle_enter();
 
-        assert!(matches!(app.current_scene, Scene::Playing(_)));
+        assert!(matches!(app.current_scene, Scene::PlayingTTT(_)));
     }
 
     #[test]
@@ -200,7 +200,7 @@ mod tests {
         app.start_ttt_game(GameMode::LocalPvP);
 
         // Make a move
-        if let Scene::Playing(game) = &mut app.current_scene {
+        if let Scene::PlayingTTT(game) = &mut app.current_scene {
             game.player_move();
             assert!(game.turn > 0);
             assert!(game.board.get(0, 0).is_some());
@@ -208,7 +208,7 @@ mod tests {
 
         app.handle_reset();
 
-        if let Scene::Playing(game) = &app.current_scene {
+        if let Scene::PlayingTTT(game) = &app.current_scene {
             assert_eq!(game.turn, 0);
             assert!(game.board.get(0, 0).is_none());
         } else {

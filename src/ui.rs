@@ -1,6 +1,6 @@
 use crate::app::App;
 use crate::game::{Board, GameState, Mark};
-use crate::scenes::{GameMode, GamePlay, Menu, Scene};
+use crate::scenes::{GameMode, GamePlayTTT, Menu, Scene};
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -13,7 +13,7 @@ use ratatui::{
 pub fn render(f: &mut Frame, app: &App) {
     match &app.current_scene {
         Scene::MainMenu(menu) | Scene::TTTMenu(menu) | Scene::UTTMenu(menu) => render_menu(f, menu),
-        Scene::Playing(game) => render_game(f, game),
+        Scene::PlayingTTT(game) => render_game(f, game),
     }
 }
 
@@ -123,7 +123,7 @@ fn render_menu_instructions(f: &mut Frame, area: Rect) {
 }
 
 /// Renders the game screen with board and status.
-fn render_game(f: &mut Frame, game: &GamePlay) {
+fn render_game(f: &mut Frame, game: &GamePlayTTT) {
     if render_size_warning(f, 10, 10) {
         return;
     }
@@ -169,7 +169,7 @@ fn render_game_mode(mode_name: &str, f: &mut Frame, area: Rect) {
 }
 
 /// Renders the tic-tac-toe board with current marks and selection highlight.
-fn render_board(f: &mut Frame, area: Rect, game: &GamePlay) {
+fn render_board(f: &mut Frame, area: Rect, game: &GamePlayTTT) {
     let board_area = center_rect(area, 25, 9);
 
     let mut lines = vec![Line::from("")];
@@ -257,7 +257,7 @@ fn render_board(f: &mut Frame, area: Rect, game: &GamePlay) {
 }
 
 /// Renders context-appropriate instructions for the game screen.
-fn render_game_instructions(f: &mut Frame, area: Rect, game: &GamePlay) {
+fn render_game_instructions(f: &mut Frame, area: Rect, game: &GamePlayTTT) {
     let instructions = if game.board.state == GameState::Playing {
         if game.turn == 0 && game.mode == GameMode::PvE {
             vec![
