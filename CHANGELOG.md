@@ -4,7 +4,7 @@
 
 ### Added
 - Improved ui.
-- Ultimate tic-tac-toe.
+- Ultimate tic-tac-toe [#2](https://github.com/Cr3sp1/TicTacFoe/pull/2).
 
 ### Bug Fixes
 - Fix link to binaries in readme.
