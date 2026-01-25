@@ -16,15 +16,16 @@ const PURPLE: Color = Color::Indexed(93);
 /// Main render function that delegates to the appropriate screen renderer.
 pub fn render(f: &mut Frame, app: &App) {
     match &app.current_scene {
-        Scene::MainMenu(menu) | Scene::TTTMenu(menu) | Scene::UTTMenu(menu) => render_menu(f, menu),
+        Scene::MainMenu(menu) => render_menu(f, menu, "Select Game"),
+        Scene::TTTMenu(menu) | Scene::UTTMenu(menu) => render_menu(f, menu, "Select Game Mode"),
         Scene::PlayingTTT(game) => render_game_ttt(f, game),
         Scene::PlayingUTT(game) => render_game_utt(f, game),
     }
 }
 
-/// Renders a menu screen with game mode options.
-fn render_menu(f: &mut Frame, menu: &Menu) {
-    if render_size_warning(f, 10, 10) {
+/// Renders the main menu screen with game options.
+fn render_menu(f: &mut Frame, menu: &Menu, title: &str) {
+    if render_size_warning(f, 14, 10) {
         return;
     }
 
@@ -39,7 +40,7 @@ fn render_menu(f: &mut Frame, menu: &Menu) {
         .split(f.area());
 
     render_title(f, chunks[0]);
-    render_menu_options(f, chunks[1], menu);
+    render_menu_options(f, chunks[1], menu, title);
     render_menu_instructions(f, chunks[2]);
 }
 
@@ -82,7 +83,7 @@ fn render_title(f: &mut Frame, area: Rect) {
 }
 
 /// Renders the menu options with highlighting for the selected option.
-fn render_menu_options(f: &mut Frame, area: Rect, menu: &Menu) {
+fn render_menu_options(f: &mut Frame, area: Rect, menu: &Menu, title: &str ) {
     let options_area = center_rect(area, 25, 9);
 
     let mut lines = vec![Line::from("")];
@@ -106,7 +107,7 @@ fn render_menu_options(f: &mut Frame, area: Rect, menu: &Menu) {
 
     let block = Block::default()
         .borders(Borders::ALL)
-        .title("Select Game Mode")
+        .title(title)
         .title_style(
             Style::default()
                 .fg(Color::Yellow)
@@ -122,7 +123,7 @@ fn render_menu_options(f: &mut Frame, area: Rect, menu: &Menu) {
 
 /// Renders the instruction text for the main menu.
 fn render_menu_instructions(f: &mut Frame, area: Rect) {
-    let instructions = &["Arrow Keys: Navigate | Enter: Select | Q: Quit".to_string()];
+    let instructions = &["Arrow Keys: Navigate | Enter: Select | Esc: Back | Q: Quit".to_string()];
 
     render_instructions(f, area, instructions);
 }
@@ -340,7 +341,7 @@ fn render_game_utt(f: &mut Frame, game: &GamePlayUTT) {
 
 /// Renders the Ultimate Tic-Tac-Toe board.
 fn render_utt_board(f: &mut Frame, area: Rect, game: &GamePlayUTT) {
-    let board_area = center_rect(area, 55, 23);
+    let board_area = center_rect(area, 47, 21);
 
     let mut lines = vec![Line::from("")];
 
@@ -417,14 +418,21 @@ fn render_utt_instructions(f: &mut Frame, area: Rect, game: &GamePlayUTT) {
     let instructions = if game.big_board.state == GameState::Playing {
         if game.selected_cell.is_none() {
             vec![
-                "Arrow Keys: Select Board | Enter: Select Cell".to_string(),
+                "Arrow Keys: Select Board | Enter: Confirm Board".to_string(),
                 "R: Reset Game | M: Main Menu | Q: Quit".to_string(),
             ]
         } else {
-            vec![
-                "Arrow Keys: Select Cell | Enter: Place Mark".to_string(),
-                "R: Reset Game | M: Main Menu | Q: Quit".to_string(),
-            ]
+            if game.big_board.active_board.is_none() {
+                vec![
+                    "Arrow Keys: Select Cell | Enter: Place Mark".to_string(),
+                    "Esc: Change Board | R: Reset Game | M: Main Menu | Q: Quit".to_string(),
+                ]
+            } else {
+                vec![
+                    "Arrow Keys: Select Cell | Enter: Place Mark".to_string(),
+                    "R: Reset Game | M: Main Menu | Q: Quit".to_string(),
+                ]
+            }
         }
     } else {
         vec!["R: Reset Game | M: Main Menu | Q: Quit".to_string()]

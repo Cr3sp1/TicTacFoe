@@ -250,6 +250,7 @@ impl GamePlayUTT {
         self.input_move(move_selection_down_playable, move_selection_down_playable);
     }
 
+    /// Selects the board if not selected already, else plays the move
     pub fn input_enter(&mut self) {
         if self.selected_cell.is_none() {
             let mut cell_position = Position { row: 0, col: 0 };
@@ -260,6 +261,13 @@ impl GamePlayUTT {
             self.selected_cell = Some(cell_position);
         } else {
             self.player_move();
+        }
+    }
+
+    /// Deselects the board if possible
+    pub fn input_esc(&mut self) {
+        if self.big_board.active_board.is_none() {
+            self.selected_cell = None;
         }
     }
 

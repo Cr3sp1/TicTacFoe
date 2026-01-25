@@ -117,6 +117,19 @@ impl App {
         }
     }
 
+    /// Handles Esc key input.
+    ///
+    /// Goes back to previous menu/move selection.
+    pub fn handle_esc(&mut self) {
+        match &mut self.current_scene {
+            Scene::MainMenu(_) => self.quit(),
+            Scene::TTTMenu(_) => self.go_to_main_menu(),
+            Scene::UTTMenu(_) => self.go_to_main_menu(),
+            Scene::PlayingUTT(game) => game.input_esc(),
+            Scene::PlayingTTT(_) => {}
+        }
+    }
+
     /// Handles 's' key input to allow AI to play first in PvE mode.
     pub fn handle_second(&mut self) {
         match &mut self.current_scene {
