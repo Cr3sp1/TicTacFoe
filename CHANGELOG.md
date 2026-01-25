@@ -1,5 +1,7 @@
 # Changelog
 
+## [0.2.0] - 2026/01/06
+
 ### Added
 - Improved ui.
 - Ultimate tic-tac-toe.
