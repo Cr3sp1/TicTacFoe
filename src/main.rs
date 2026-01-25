@@ -74,6 +74,9 @@ where
                     KeyCode::Enter | KeyCode::Char(' ') => {
                         app.handle_enter();
                     }
+                    KeyCode::Esc => {
+                        app.handle_esc();
+                    }
                     _ => {}
                 }
             }

@@ -1,11 +1,13 @@
 # Tic-Tac-Foe
 
-A terminal-based Tic-Tac-Toe game built with Rust and Ratatui.
+![gif](./media/utt.gif)
+
+A terminal-based Ultimate Tic-Tac-Toe game built with Rust and Ratatui.
 
 ## Features
-
+- **Choose Mode**: Both base and Ultimate version of tic-tac-toe are avaliable.
 - **Local PvP**: Play against another person on the same computer.
-- **Play vs AI**: Challenge a simple AI opponent.
+- **Play vs AI**: Challenge a simple AI opponent (only base game so far).
 - **Intuitive TUI**: Clean terminal user interface with keyboard navigation.
 
 ## Requirements
@@ -76,8 +78,6 @@ Or directly run the compiled binary:
 
 ## To Do
 
-- Implement peer to peer connection to play against other people remotely.
-- Add Ultimate tic-tac-toe to game modes.
 - Implement Monte Carlo tree-search algorithm to provide a strong enemy AI.
 
 ## Dependencies

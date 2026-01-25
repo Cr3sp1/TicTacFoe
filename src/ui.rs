@@ -1,6 +1,8 @@
-use crate::app::{App, CurrentScreen};
-use crate::game::Mark;
-use crate::scenes::{GameMode, GamePlay, GameState, MainMenu};
+use crate::app::App;
+use crate::game::base::SmallBoard;
+use crate::game::{Board, GameState, Mark};
+use crate::scenes::{GameMode, GamePlayTTT, GamePlayUTT, Menu, Scene};
+use crate::utils::Position;
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -9,17 +11,21 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Paragraph},
 };
 
+const PURPLE: Color = Color::Indexed(93);
+
 /// Main render function that delegates to the appropriate screen renderer.
 pub fn render(f: &mut Frame, app: &App) {
-    match &app.current_screen {
-        CurrentScreen::MainMenu(menu) => render_main_menu(f, menu),
-        CurrentScreen::Playing(game) => render_game(f, game),
+    match &app.current_scene {
+        Scene::MainMenu(menu) => render_menu(f, menu, "Select Game"),
+        Scene::TTTMenu(menu) | Scene::UTTMenu(menu) => render_menu(f, menu, "Select Game Mode"),
+        Scene::PlayingTTT(game) => render_game_ttt(f, game),
+        Scene::PlayingUTT(game) => render_game_utt(f, game),
     }
 }
 
-/// Renders the main menu screen with game mode options.
-fn render_main_menu(f: &mut Frame, menu: &MainMenu) {
-    if render_size_warning(f, 10, 10) {
+/// Renders the main menu screen with game options.
+fn render_menu(f: &mut Frame, menu: &Menu, title: &str) {
+    if render_size_warning(f, 14, 10) {
         return;
     }
 
@@ -27,14 +33,14 @@ fn render_main_menu(f: &mut Frame, menu: &MainMenu) {
         .direction(Direction::Vertical)
         .margin(0)
         .constraints([
-            Constraint::Length(7),
-            Constraint::Min(10),
+            Constraint::Max(7),
+            Constraint::Min(9),
             Constraint::Length(3),
         ])
         .split(f.area());
 
     render_title(f, chunks[0]);
-    render_menu_options(f, chunks[1], menu);
+    render_menu_options(f, chunks[1], menu, title);
     render_menu_instructions(f, chunks[2]);
 }
 
@@ -77,23 +83,20 @@ fn render_title(f: &mut Frame, area: Rect) {
 }
 
 /// Renders the menu options with highlighting for the selected option.
-fn render_menu_options(f: &mut Frame, area: Rect, menu: &MainMenu) {
-    let options_area = center_rect(area, 25, 9);
+fn render_menu_options(f: &mut Frame, area: Rect, menu: &Menu, title: &str) {
+    let options_area = center_rect(area, 30, 9);
 
     let mut lines = vec![Line::from("")];
 
     for (i, option) in menu.options.iter().enumerate() {
-        let style = if i == menu.selected_option {
-            Style::default()
-                .fg(Color::Black)
-                .bg(Color::White)
-                .add_modifier(Modifier::BOLD)
+        let (style, prefix) = if i == menu.selected_option {
+            (Style::default().add_modifier(Modifier::BOLD).fg(Color::LightYellow), "🢒")
         } else {
-            Style::default().fg(Color::White)
+            (Style::default().add_modifier(Modifier::BOLD), " ")
         };
 
         lines.push(Line::from(vec![Span::styled(
-            format!("  {}  ", option),
+            format!("{}{}  ", prefix, option),
             style,
         )]));
         lines.push(Line::from(""));
@@ -101,10 +104,10 @@ fn render_menu_options(f: &mut Frame, area: Rect, menu: &MainMenu) {
 
     let block = Block::default()
         .borders(Borders::ALL)
-        .title("Select Game Mode")
+        .title(title)
         .title_style(
             Style::default()
-                .fg(Color::Yellow)
+                .fg(Color::LightYellow)
                 .add_modifier(Modifier::BOLD),
         );
 
@@ -117,13 +120,13 @@ fn render_menu_options(f: &mut Frame, area: Rect, menu: &MainMenu) {
 
 /// Renders the instruction text for the main menu.
 fn render_menu_instructions(f: &mut Frame, area: Rect) {
-    let instructions = &["Arrow Keys: Navigate | Enter: Select | Q: Quit".to_string()];
+    let instructions = &["Arrow Keys: Navigate | Enter: Select | Esc: Back | Q: Quit".to_string()];
 
     render_instructions(f, area, instructions);
 }
 
 /// Renders the game screen with board and status.
-fn render_game(f: &mut Frame, game: &GamePlay) {
+fn render_game_ttt(f: &mut Frame, game: &GamePlayTTT) {
     if render_size_warning(f, 10, 10) {
         return;
     }
@@ -132,54 +135,159 @@ fn render_game(f: &mut Frame, game: &GamePlay) {
         .direction(Direction::Vertical)
         .margin(0)
         .constraints([
-            Constraint::Max(3),
-            Constraint::Min(11),
+            Constraint::Max(7),
+            Constraint::Min(9),
             Constraint::Length(4),
         ])
         .split(f.area());
 
-    let mode_name = match game.mode {
-        GameMode::PvE => "Play vs AI",
-        GameMode::LocalPvP => "Local PvP",
-    };
-
-    render_game_mode(mode_name, f, chunks[0]);
-    render_board(f, chunks[1], game);
-    render_game_instructions(f, chunks[2], game);
-}
-
-/// Renders the current game mode indicator.
-fn render_game_mode(mode_name: &str, f: &mut Frame, area: Rect) {
-    let width = mode_name.chars().count() as u16 + 5;
-    let title_area = center_rect(area, width, 3);
-    let title = Paragraph::new(mode_name)
-        .style(
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )
-        .alignment(Alignment::Center)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_type(BorderType::HeavyDoubleDashed)
-                .title("Mode"),
-        );
-    f.render_widget(title, title_area);
+    render_title(f, chunks[0]);
+    render_ttt_board(f, chunks[1], game);
+    render_ttt_instructions(f, chunks[2], game);
 }
 
 /// Renders the tic-tac-toe board with current marks and selection highlight.
-fn render_board(f: &mut Frame, area: Rect, game: &GamePlay) {
+fn render_ttt_board(f: &mut Frame, area: Rect, game: &GamePlayTTT) {
     let board_area = center_rect(area, 25, 9);
 
     let mut lines = vec![Line::from("")];
 
     // Add current player or game result
-    let (status, style) = match game.state {
+    let (status, status_style) = game_status(game.board.state, game.active_player);
+
+    // Render the board
+    for y in 0..5 {
+        lines.push(ttt_board_line(
+            &game.board,
+            y,
+            Some((game.selected, game.active_player)),
+            Style::default(),
+        ));
+    }
+
+    let mode_name = match game.mode {
+        GameMode::PvE => "Mode: Play vs AI",
+        GameMode::LocalPvP => "Mode: Local PvP",
+    };
+
+    let game_block = game_block(mode_name, status.as_str(), status_style);
+
+    let board = Paragraph::new(lines)
+        .alignment(Alignment::Center)
+        .block(game_block);
+
+    f.render_widget(board, board_area);
+}
+
+fn game_block<'a>(mode_name: &'a str, status: &'a str, status_style: Style) -> Block<'a> {
+    Block::default()
+        .borders(Borders::ALL)
+        .title(
+            Line::from(status)
+                .style(status_style)
+                .alignment(Alignment::Center),
+        )
+        .title_style(status_style)
+        .title_bottom(
+            Line::from(mode_name)
+                .style(
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                )
+                .alignment(Alignment::Center),
+        )
+}
+
+fn ttt_board_line(
+    board: &SmallBoard,
+    y: usize,
+    selection: Option<(Position, Mark)>,
+    board_style: Style,
+) -> Line<'static> {
+    let row = match y {
+        val if val >= 5 => {
+            panic!("Invalid value of y, must be in [0, 4].")
+        }
+        even if even % 2 == 0 => even / 2,
+        _ => {
+            return Line::from(Span::raw("───┼───┼───").style(board_style));
+        }
+    };
+    let mut row_spans = vec![];
+    for col in 0..3 {
+        let (cell_content, style) = match board.get(row, col) {
+            Some(Mark::X) => (
+                "X",
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+            ),
+            Some(Mark::O) => (
+                "O",
+                Style::default()
+                    .fg(Color::Blue)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            None => {
+                if let Some((position, mark)) = selection {
+                    if row == position.row
+                        && col == position.col
+                        && board.state == GameState::Playing
+                    {
+                        let display = match mark {
+                            Mark::X => "X",
+                            Mark::O => "O",
+                        };
+                        (
+                            display,
+                            Style::default()
+                                .fg(Color::LightYellow)
+                                .add_modifier(Modifier::BOLD),
+                        )
+                    } else {
+                        (" ", Style::default())
+                    }
+                } else {
+                    (" ", Style::default())
+                }
+            }
+        };
+
+        row_spans.push(Span::styled(format!(" {} ", cell_content), style));
+
+        if col < 2 {
+            row_spans.push(Span::raw("│").style(board_style));
+        }
+    }
+    Line::from(row_spans)
+}
+
+/// Renders context-appropriate instructions for the game screen.
+fn render_ttt_instructions(f: &mut Frame, area: Rect, game: &GamePlayTTT) {
+    let instructions = if game.board.state == GameState::Playing {
+        if game.turn == 0 && game.mode == GameMode::PvE {
+            vec![
+                "S: Play Second | Arrow Keys: Move | Enter: Place Mark".to_string(),
+                "R: Reset Game | M: Main Menu | Q: Quit".to_string(),
+            ]
+        } else {
+            vec![
+                "Arrow Keys: Move | Enter: Place Mark".to_string(),
+                "R: Reset Game | M: Main Menu | Q: Quit".to_string(),
+            ]
+        }
+    } else {
+        vec!["R: Reset Game | M: Main Menu | Q: Quit".to_string()]
+    };
+
+    render_instructions(f, area, &instructions);
+}
+
+fn game_status(game_state: GameState, current_player: Mark) -> (String, Style) {
+    match game_state {
         GameState::Playing => (
-            format!("Current Player: {}", game.active_player),
+            format!("Current Player: {}", current_player),
             Style::default()
-                .fg(Color::Yellow)
+                .fg(Color::LightYellow)
                 .add_modifier(Modifier::BOLD),
         ),
         GameState::Won(Mark::X) => (
@@ -194,60 +302,100 @@ fn render_board(f: &mut Frame, area: Rect, game: &GamePlay) {
         ),
         GameState::Draw => (
             "DRAW!".to_string(),
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(PURPLE).add_modifier(Modifier::BOLD),
         ),
-    };
+    }
+}
 
-    // Render the board
-    for row in 0..3 {
-        let mut row_spans = vec![];
-        for col in 0..3 {
-            let mut cell_content = match game.board.get(row, col) {
-                Some(Mark::X) => "X",
-                Some(Mark::O) => "O",
-                None => " ",
-            };
+/// Renders the Ultimate Tic-Tac-Toe game screen.
+fn render_game_utt(f: &mut Frame, game: &GamePlayUTT) {
+    if render_size_warning(f, 43, 20) {
+        return;
+    }
 
-            let style = if row == game.selected_row
-                && col == game.selected_col
-                && game.state == GameState::Playing
-            {
-                cell_content = match game.active_player {
-                    Mark::X => "X",
-                    Mark::O => "O",
-                };
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                match game.board.get(row, col) {
-                    Some(Mark::X) => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-                    Some(Mark::O) => Style::default()
-                        .fg(Color::Blue)
-                        .add_modifier(Modifier::BOLD),
-                    None => Style::default().fg(Color::DarkGray),
-                }
-            };
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        // .margin(0)
+        .constraints([
+            Constraint::Max(7),
+            Constraint::Min(21),
+            Constraint::Length(4),
+        ])
+        .split(f.area());
 
-            row_spans.push(Span::styled(format!(" {} ", cell_content), style));
+    render_title(f, chunks[0]);
+    render_utt_board(f, chunks[1], game);
+    render_utt_instructions(f, chunks[2], game);
+}
 
-            if col < 2 {
-                row_spans.push(Span::raw("|"));
+/// Renders the Ultimate Tic-Tac-Toe board.
+fn render_utt_board(f: &mut Frame, area: Rect, game: &GamePlayUTT) {
+    let board_area = center_rect(area, 47, 21);
+
+    let mut lines = vec![Line::from("")];
+
+    // Add current player or game result
+    let (status, status_style) = game_status(game.big_board.state, game.active_player);
+
+    // Render the meta-board (3x3 grid of small boards)
+    for big_y in 0..5 {
+        let big_row = match big_y {
+            even if even % 2 == 0 => even / 2,
+            _ => {
+                let mut y_spans: Vec<Span> = Vec::new();
+                y_spans.push(Span::from("━".repeat(12)));
+                y_spans.push(Span::from("╋"));
+                y_spans.push(Span::from("━".repeat(13)));
+                y_spans.push(Span::from("╋"));
+                y_spans.push(Span::from("━".repeat(12)));
+                lines.push(Line::from(y_spans));
+                continue;
             }
-        }
-        lines.push(Line::from(row_spans));
+        };
+        for small_y in 0..5 {
+            let mut y_spans: Vec<Span> = Vec::new();
+            for big_x in 0..5 {
+                let big_col = match big_x {
+                    even if even % 2 == 0 => even / 2,
+                    _ => {
+                        y_spans.push(Span::raw(" ┃ "));
+                        continue;
+                    }
+                };
+                let small_board = game.big_board.get_board(big_row, big_col);
+                let (selection, board_style) = if game.selected_board.row == big_row
+                    && game.selected_board.col == big_col
+                    && game.big_board.state == GameState::Playing
+                {
+                    match game.selected_cell {
+                        Some(position) => (
+                            Some((position, game.active_player)),
+                            Style::default().fg(Color::Green),
+                        ),
+                        None => (None, Style::default().fg(Color::LightYellow)),
+                    }
+                } else {
+                    match small_board.state {
+                        GameState::Playing => (None, Style::default()),
+                        GameState::Draw => (None, Style::default().fg(PURPLE)),
+                        GameState::Won(Mark::X) => (None, Style::default().fg(Color::Red)),
+                        GameState::Won(Mark::O) => (None, Style::default().fg(Color::Blue)),
+                    }
+                };
 
-        if row < 2 {
-            lines.push(Line::from("-----------"));
+                y_spans
+                    .append(&mut ttt_board_line(small_board, small_y, selection, board_style).spans)
+            }
+            lines.push(Line::from(y_spans));
         }
     }
 
-    let game_block = Block::default()
-        .borders(Borders::ALL)
-        .title(status)
-        .title_style(style);
+    let mode_name = match game.mode {
+        GameMode::PvE => "Mode: Play vs AI",
+        GameMode::LocalPvP => "Mode: Local PvP",
+    };
+
+    let game_block = game_block(mode_name, status.as_str(), status_style);
 
     let board = Paragraph::new(lines)
         .alignment(Alignment::Center)
@@ -256,19 +404,26 @@ fn render_board(f: &mut Frame, area: Rect, game: &GamePlay) {
     f.render_widget(board, board_area);
 }
 
-/// Renders context-appropriate instructions for the game screen.
-fn render_game_instructions(f: &mut Frame, area: Rect, game: &GamePlay) {
-    let instructions = if game.state == GameState::Playing {
-        if game.turn == 0 && game.mode == GameMode::PvE {
+/// Renders instructions for Ultimate Tic-Tac-Toe.
+fn render_utt_instructions(f: &mut Frame, area: Rect, game: &GamePlayUTT) {
+    let instructions = if game.big_board.state == GameState::Playing {
+        if game.selected_cell.is_none() {
             vec![
-                "S: Play Second | Arrow Keys: Move | Enter: Place Mark".to_string(),
+                "Arrow Keys: Select Board | Enter: Confirm Board".to_string(),
                 "R: Reset Game | M: Main Menu | Q: Quit".to_string(),
             ]
         } else {
-            vec![
-                "Arrow Keys: Move | Enter: Place Mark".to_string(),
-                "R: Reset Game | M: Main Menu | Q: Quit".to_string(),
-            ]
+            if game.big_board.active_board.is_none() {
+                vec![
+                    "Arrow Keys: Select Cell | Enter: Place Mark".to_string(),
+                    "Esc: Change Board | R: Reset Game | M: Main Menu | Q: Quit".to_string(),
+                ]
+            } else {
+                vec![
+                    "Arrow Keys: Select Cell | Enter: Place Mark".to_string(),
+                    "R: Reset Game | M: Main Menu | Q: Quit".to_string(),
+                ]
+            }
         }
     } else {
         vec!["R: Reset Game | M: Main Menu | Q: Quit".to_string()]
@@ -306,7 +461,11 @@ fn render_instructions(f: &mut Frame, area: Rect, instructions: &[String]) {
             Block::default()
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded)
-                .title("Commands"),
+                .title(
+                    Line::from("Commands")
+                        .centered()
+                        .style(Style::default().add_modifier(Modifier::BOLD)),
+                ),
         );
 
     f.render_widget(paragraph, area);

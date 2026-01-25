@@ -1,3 +1,6 @@
+pub mod base;
+pub mod ultimate;
+
 use std::fmt;
 
 /// Represents a player's mark (X or O) on the tic-tac-toe board.
@@ -16,285 +19,249 @@ impl fmt::Display for Mark {
     }
 }
 
-/// A 3x3 tic-tac-toe board.
-///
-/// The board is represented as a flat array of 9 cells, where each cell
-/// can contain either a mark (X or O) or be empty (None).
-#[derive(Copy, Clone)]
-pub struct Board {
-    cells: [Option<Mark>; 9],
+/// Represents the current state of a tic-tac-toe game.
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum GameState {
+    /// The game is still in progress.
+    Playing,
+    /// The game has been won by the specified mark.
+    Won(Mark),
+    /// The game ended in a draw.
+    Draw,
 }
 
-impl Board {
-    /// Creates a new empty board with all cells set to None.
-    pub fn new() -> Self {
-        Board { cells: [None; 9] }
-    }
-
+/// Trait for types that can act as a tic-tac-toe board.
+///
+/// Implementors must provide a method to get the mark at a specific position.
+pub trait Board {
     /// Gets the mark at the specified position.
     ///
     /// # Arguments
     /// * `row` - Row index (0-2)
     /// * `col` - Column index (0-2)
     ///
-    /// # Panics
-    /// Panics if row or col is greater than 3.
-    pub fn get(&self, row: usize, col: usize) -> Option<Mark> {
-        if row > 3 || col > 3 {
-            panic!("Tried to access board position ({row}, {col}) which is out of bounds");
-        }
-        self.cells[row * 3 + col]
-    }
+    /// # Returns
+    /// The mark at the position, or None if the cell is empty.
+    fn get(&self, row: usize, col: usize) -> Option<Mark>;
 
-    /// Sets the mark at the specified position.
+    /// Gets whether it is possible to play in the specified position.
     ///
     /// # Arguments
     /// * `row` - Row index (0-2)
     /// * `col` - Column index (0-2)
-    /// * `mark` - The mark to place (Some(Mark::X), Some(Mark::O), or None)
     ///
-    /// # Panics
-    /// Panics if row or col is greater than 3.
-    pub fn set(&mut self, row: usize, col: usize, mark: Option<Mark>) {
-        if row > 3 || col > 3 {
-            panic!("Tried to access board position ({row}, {col}) which is out of bounds");
-        }
-        self.cells[row * 3 + col] = mark;
-    }
+    /// # Returns
+    /// True if the position is playable, else False.
+    fn is_playable(&self, row: usize, col: usize) -> bool;
+}
 
-    /// Checks if the specified row has three matching marks.
-    ///
-    /// Returns the winning mark if all three cells in the row match,
-    /// or None if they don't match or any cell is empty.
-    fn check_row(&self, row: usize) -> Option<Mark> {
-        let mark_0 = self.get(row, 0)?;
-        for i in 1..3 {
-            let mark_i = self.get(row, i)?;
-            if mark_i != mark_0 {
-                return None;
-            }
+/// Checks if the specified row has three matching marks.
+///
+/// # Arguments
+/// * `board` - A reference to any type implementing the Board trait
+/// * `row` - Row index (0-2)
+///
+/// # Returns
+/// The winning mark if all three cells in the row match,
+/// or None if they don't match or any cell is empty.
+pub fn check_row(board: &impl Board, row: usize) -> Option<Mark> {
+    let mark_0 = board.get(row, 0)?;
+    for i in 1..3 {
+        let mark_i = board.get(row, i)?;
+        if mark_i != mark_0 {
+            return None;
         }
-        Some(mark_0)
     }
+    Some(mark_0)
+}
 
-    /// Checks if the specified column has three matching marks.
-    ///
-    /// Returns the winning mark if all three cells in the column match,
-    /// or None if they don't match or any cell is empty.
-    fn check_col(&self, col: usize) -> Option<Mark> {
-        let mark_0 = self.get(0, col)?;
-        for i in 1..3 {
-            let mark_i = self.get(i, col)?;
-            if mark_i != mark_0 {
-                return None;
-            }
+/// Checks if the specified column has three matching marks.
+///
+/// # Arguments
+/// * `board` - A reference to any type implementing the Board trait
+/// * `col` - Column index (0-2)
+///
+/// # Returns
+/// The winning mark if all three cells in the column match,
+/// or None if they don't match or any cell is empty.
+pub fn check_col(board: &impl Board, col: usize) -> Option<Mark> {
+    let mark_0 = board.get(0, col)?;
+    for i in 1..3 {
+        let mark_i = board.get(i, col)?;
+        if mark_i != mark_0 {
+            return None;
         }
-        Some(mark_0)
     }
+    Some(mark_0)
+}
 
-    /// Checks the top-left to bottom-right diagonal for three matching marks.
-    ///
-    /// Returns the winning mark if all three cells match, or None otherwise.
-    fn check_diag_dexter(&self) -> Option<Mark> {
-        let mark_0 = self.get(0, 0)?;
-        for i in 1..3 {
-            let mark_i = self.get(i, i)?;
-            if mark_i != mark_0 {
-                return None;
-            }
+/// Checks the top-left to bottom-right diagonal for three matching marks.
+///
+/// # Arguments
+/// * `board` - A reference to any type implementing the Board trait
+///
+/// # Returns
+/// The winning mark if all three cells match, or None otherwise.
+pub fn check_diag_dexter(board: &impl Board) -> Option<Mark> {
+    let mark_0 = board.get(0, 0)?;
+    for i in 1..3 {
+        let mark_i = board.get(i, i)?;
+        if mark_i != mark_0 {
+            return None;
         }
-        Some(mark_0)
     }
+    Some(mark_0)
+}
 
-    /// Checks the top-right to bottom-left diagonal for three matching marks.
-    ///
-    /// Returns the winning mark if all three cells match, or None otherwise.
-    fn check_diag_sinister(&self) -> Option<Mark> {
-        let mark_0 = self.get(0, 2)?;
-        for i in 1..3 {
-            let mark_i = self.get(i, 2 - i)?;
-            if mark_i != mark_0 {
-                return None;
-            }
+/// Checks the top-right to bottom-left diagonal for three matching marks.
+///
+/// # Arguments
+/// * `board` - A reference to any type implementing the Board trait
+///
+/// # Returns
+/// The winning mark if all three cells match, or None otherwise.
+pub fn check_diag_sinister(board: &impl Board) -> Option<Mark> {
+    let mark_0 = board.get(0, 2)?;
+    for i in 1..3 {
+        let mark_i = board.get(i, 2 - i)?;
+        if mark_i != mark_0 {
+            return None;
         }
-        Some(mark_0)
     }
+    Some(mark_0)
+}
 
-    /// Checks all possible winning conditions (rows, columns, and diagonals).
-    ///
-    /// Returns the winning mark if any winning condition is met, or None if
-    /// there is no winner yet.
-    pub fn check_all(&self) -> Option<Mark> {
-        if let Some(mark) = self.check_diag_dexter() {
+/// Checks all possible winning conditions (rows, columns, and diagonals).
+///
+/// # Arguments
+/// * `board` - A reference to any type implementing the Board trait
+///
+/// # Returns
+/// The winning mark if any winning condition is met, or None if
+/// there is no winner yet.
+pub fn check_win(board: &impl Board) -> Option<Mark> {
+    if let Some(mark) = check_diag_dexter(board) {
+        return Some(mark);
+    }
+    if let Some(mark) = check_diag_sinister(board) {
+        return Some(mark);
+    }
+    for i in 0..3 {
+        if let Some(mark) = check_row(board, i) {
             return Some(mark);
         }
-        if let Some(mark) = self.check_diag_sinister() {
+        if let Some(mark) = check_col(board, i) {
             return Some(mark);
         }
-        for i in 0..3 {
-            if let Some(mark) = self.check_row(i) {
-                return Some(mark);
-            }
-            if let Some(mark) = self.check_col(i) {
-                return Some(mark);
-            }
-        }
-
-        None
     }
 
-    /// Checks if all cells on the board are filled.
-    ///
-    /// Returns true if every cell contains a mark, false otherwise.
-    pub fn check_complete(&self) -> bool {
-        for i in 0..9 {
-            if self.cells[i].is_none() {
+    None
+}
+
+/// Checks if all cells on the board are filled.
+///
+/// # Returns
+/// True if at least one cell is playable, else False.
+pub fn check_complete(board: &impl Board) -> bool {
+    for row in 0..3 {
+        for col in 0..3 {
+            if board.is_playable(row, col) {
                 return false;
             }
         }
-        true
     }
-}
-
-impl fmt::Display for Board {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for row in 0..3 {
-            for col in 0..3 {
-                let index = row * 3 + col;
-                match self.cells[index] {
-                    Some(mark) => write!(f, " {} ", mark)?,
-                    None => write!(f, " {} ", index)?,
-                }
-                if col < 2 {
-                    write!(f, "|")?;
-                }
-            }
-            if row < 2 {
-                writeln!(f)?;
-                writeln!(f, "-----------")?;
-            }
-        }
-        Ok(())
-    }
+    true
 }
 
 #[cfg(test)]
 mod tests {
+    use super::base::*;
     use super::*;
-
-    impl Board {
-        /// Test helper: Sets an entire row with the provided marks.
-        fn set_row(&mut self, row: usize, marks: [Option<Mark>; 3]) {
-            for col in 0..3 {
-                self.set(row, col, marks[col]);
-            }
-        }
-
-        /// Test helper: Sets an entire column with the provided marks.
-        fn set_col(&mut self, col: usize, marks: [Option<Mark>; 3]) {
-            for row in 0..3 {
-                self.set(row, col, marks[row]);
-            }
-        }
-    }
 
     #[test]
     fn test_check_row() {
-        let mut board = Board::new();
-        assert_eq!(board.check_row(0), None);
+        let mut board = SmallBoard::new();
+        assert_eq!(check_row(&board, 0), None);
 
         board.set_row(0, [Some(Mark::X), Some(Mark::X), Some(Mark::X)]);
-        assert_eq!(board.check_row(0), Some(Mark::X));
+        assert_eq!(check_row(&board, 0), Some(Mark::X));
 
         board.set_row(1, [Some(Mark::O), Some(Mark::O), Some(Mark::O)]);
-        assert_eq!(board.check_row(1), Some(Mark::O));
+        assert_eq!(check_row(&board, 1), Some(Mark::O));
 
         board.set_row(0, [Some(Mark::X), Some(Mark::O), Some(Mark::X)]);
-        assert_eq!(board.check_row(0), None);
+        assert_eq!(check_row(&board, 0), None);
 
         board.set(0, 1, Some(Mark::X));
-        assert_eq!(board.check_row(0), Some(Mark::X));
+        assert_eq!(check_row(&board, 0), Some(Mark::X));
 
         board.set_row(0, [Some(Mark::X), Some(Mark::O), None]);
-        assert_eq!(board.check_row(0), None);
+        assert_eq!(check_row(&board, 0), None);
     }
 
     #[test]
     fn test_check_col() {
-        let mut board = Board::new();
-        assert_eq!(board.check_col(0), None);
+        let mut board = SmallBoard::new();
+        assert_eq!(check_col(&board, 0), None);
 
         board.set_col(0, [Some(Mark::X), Some(Mark::X), Some(Mark::X)]);
-        assert_eq!(board.check_col(0), Some(Mark::X));
+        assert_eq!(check_col(&board, 0), Some(Mark::X));
 
         board.set_col(1, [Some(Mark::O), Some(Mark::O), Some(Mark::O)]);
-        assert_eq!(board.check_col(1), Some(Mark::O));
+        assert_eq!(check_col(&board, 1), Some(Mark::O));
 
         board.set_col(0, [Some(Mark::X), Some(Mark::O), Some(Mark::X)]);
-        assert_eq!(board.check_col(0), None);
+        assert_eq!(check_col(&board, 0), None);
 
         board.set(1, 0, Some(Mark::X));
-        assert_eq!(board.check_col(0), Some(Mark::X));
+        assert_eq!(check_col(&board, 0), Some(Mark::X));
 
         board.set_col(0, [Some(Mark::X), Some(Mark::O), None]);
-        assert_eq!(board.check_col(0), None);
+        assert_eq!(check_col(&board, 0), None);
     }
 
     #[test]
     fn test_check_diag() {
-        let mut board = Board::new();
-        assert_eq!(board.check_diag_dexter(), None);
-        assert_eq!(board.check_diag_sinister(), None);
+        let mut board = SmallBoard::new();
+        assert_eq!(check_diag_dexter(&board), None);
+        assert_eq!(check_diag_sinister(&board), None);
 
         board.set_row(0, [Some(Mark::X), Some(Mark::O), Some(Mark::O)]);
         board.set_row(1, [Some(Mark::X), None, Some(Mark::X)]);
         board.set_row(2, [Some(Mark::O), Some(Mark::X), Some(Mark::X)]);
-        assert_eq!(board.check_diag_dexter(), None);
-        assert_eq!(board.check_diag_sinister(), None);
+        assert_eq!(check_diag_dexter(&board), None);
+        assert_eq!(check_diag_sinister(&board), None);
 
         board.set(1, 1, Some(Mark::X));
-        assert_eq!(board.check_diag_dexter(), Some(Mark::X));
-        assert_eq!(board.check_diag_sinister(), None);
+        assert_eq!(check_diag_dexter(&board), Some(Mark::X));
+        assert_eq!(check_diag_sinister(&board), None);
 
         board.set(1, 1, Some(Mark::O));
-        assert_eq!(board.check_diag_dexter(), None);
-        assert_eq!(board.check_diag_sinister(), Some(Mark::O));
+        assert_eq!(check_diag_dexter(&board), None);
+        assert_eq!(check_diag_sinister(&board), Some(Mark::O));
     }
 
     #[test]
-    fn test_check_all() {
-        let mut board = Board::new();
-        assert_eq!(board.check_diag_dexter(), None);
-        assert_eq!(board.check_diag_sinister(), None);
+    fn test_check_win() {
+        let mut board = SmallBoard::new();
+        assert_eq!(check_diag_dexter(&board), None);
+        assert_eq!(check_diag_sinister(&board), None);
 
         board.set_row(0, [Some(Mark::X), Some(Mark::O), Some(Mark::O)]);
         board.set_row(1, [Some(Mark::X), None, Some(Mark::X)]);
         board.set_row(2, [None, Some(Mark::O), None]);
-        assert_eq!(board.check_all(), None);
+        assert_eq!(check_win(&board), None);
+        assert_eq!(board.state, GameState::Playing);
 
         board.set(1, 1, Some(Mark::X));
-        assert_eq!(board.check_all(), Some(Mark::X));
+        assert_eq!(check_win(&board), Some(Mark::X));
 
         board.set(1, 1, Some(Mark::O));
-        assert_eq!(board.check_all(), Some(Mark::O));
+        assert_eq!(check_win(&board), Some(Mark::O));
 
         board.set(0, 1, Some(Mark::X));
-        assert_eq!(board.check_all(), None);
+        assert_eq!(check_win(&board), None);
         board.set(2, 0, Some(Mark::O));
-        assert_eq!(board.check_all(), Some(Mark::O));
-    }
-
-    #[test]
-    fn test_check_complete() {
-        let mut board = Board::new();
-        assert_eq!(board.check_complete(), false);
-
-        board.set_row(0, [Some(Mark::X), Some(Mark::O), Some(Mark::O)]);
-        board.set_row(1, [Some(Mark::X), None, Some(Mark::X)]);
-        board.set_row(2, [Some(Mark::O), Some(Mark::O), Some(Mark::X)]);
-        assert_eq!(board.check_complete(), false);
-
-        board.set(1, 1, Some(Mark::X));
-        assert_eq!(board.check_complete(), true);
+        assert_eq!(check_win(&board), Some(Mark::O));
     }
 }

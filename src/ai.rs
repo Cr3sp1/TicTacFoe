@@ -1,4 +1,5 @@
-use crate::game::{Board, Mark};
+use crate::game::base::SmallBoard;
+use crate::game::{Board, GameState, Mark};
 use rand::prelude::*;
 use std::vec::Vec;
 
@@ -45,7 +46,7 @@ impl SimpleAi {
     ///
     /// # Panics
     /// Panics if there are no available moves on the board
-    pub fn choose_move(&self, mut board: Board) -> (usize, usize) {
+    pub fn choose_move(&self, mut board: SmallBoard) -> (usize, usize) {
         // find all available moves
         let available = available_moves(&board);
         if available.is_empty() {
@@ -54,26 +55,22 @@ impl SimpleAi {
 
         // check for available wins
         for &(row, col) in available.iter() {
-            board.set(row, col, Some(self.ai_mark));
-            match board.check_all() {
-                Some(_) => {
-                    return (row, col);
-                }
-                _ => {}
-            };
+            board.make_move(row, col, self.ai_mark);
+            if board.state == GameState::Won(self.ai_mark) {
+                return (row, col);
+            }
             board.set(row, col, None);
+            board.state = GameState::Playing;
         }
 
         // check for possible losses
         for &(row, col) in available.iter() {
-            board.set(row, col, Some(self.player_mark));
-            match board.check_all() {
-                Some(_) => {
-                    return (row, col);
-                }
-                _ => {}
-            };
+            board.make_move(row, col, self.player_mark);
+            if board.state == GameState::Won(self.player_mark) {
+                return (row, col);
+            }
             board.set(row, col, None);
+            board.state = GameState::Playing;
         }
 
         // move at random
@@ -89,7 +86,7 @@ impl SimpleAi {
 ///
 /// # Returns
 /// A vector of (row, col) tuples representing empty positions
-fn available_moves(board: &Board) -> Vec<(usize, usize)> {
+fn available_moves(board: &SmallBoard) -> Vec<(usize, usize)> {
     let mut moves: Vec<(usize, usize)> = Vec::new();
     for row in 0..3 {
         for col in 0..3 {
@@ -107,7 +104,7 @@ mod tests {
 
     #[test]
     fn test_ai_takes_winning_move() {
-        let mut board = Board::new();
+        let mut board = SmallBoard::new();
         // Set up board where AI (O) can win
         board.set(0, 0, Some(Mark::O));
         board.set(0, 1, Some(Mark::O));
@@ -121,7 +118,7 @@ mod tests {
 
     #[test]
     fn test_ai_blocks_opponent_win() {
-        let mut board = Board::new();
+        let mut board = SmallBoard::new();
         // Set up board where player (X) is about to win
         board.set(0, 0, Some(Mark::X));
         board.set(0, 1, Some(Mark::X));
@@ -136,7 +133,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "No available moves found by SimpleAi")]
     fn test_ai_panics_on_full_board() {
-        let mut board = Board::new();
+        let mut board = SmallBoard::new();
         // Fill the entire board
         for row in 0..3 {
             for col in 0..3 {
