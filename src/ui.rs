@@ -33,8 +33,8 @@ fn render_menu(f: &mut Frame, menu: &Menu, title: &str) {
         .direction(Direction::Vertical)
         .margin(0)
         .constraints([
-            Constraint::Length(7),
-            Constraint::Min(10),
+            Constraint::Max(7),
+            Constraint::Min(9),
             Constraint::Length(3),
         ])
         .split(f.area());
@@ -83,23 +83,20 @@ fn render_title(f: &mut Frame, area: Rect) {
 }
 
 /// Renders the menu options with highlighting for the selected option.
-fn render_menu_options(f: &mut Frame, area: Rect, menu: &Menu, title: &str ) {
-    let options_area = center_rect(area, 25, 9);
+fn render_menu_options(f: &mut Frame, area: Rect, menu: &Menu, title: &str) {
+    let options_area = center_rect(area, 30, 9);
 
     let mut lines = vec![Line::from("")];
 
     for (i, option) in menu.options.iter().enumerate() {
-        let style = if i == menu.selected_option {
-            Style::default()
-                .fg(Color::Black)
-                .bg(Color::White)
-                .add_modifier(Modifier::BOLD)
+        let (style, prefix) = if i == menu.selected_option {
+            (Style::default().add_modifier(Modifier::BOLD).fg(Color::LightYellow), "🢒")
         } else {
-            Style::default().fg(Color::White)
+            (Style::default().add_modifier(Modifier::BOLD), " ")
         };
 
         lines.push(Line::from(vec![Span::styled(
-            format!("  {}  ", option),
+            format!("{}{}  ", prefix, option),
             style,
         )]));
         lines.push(Line::from(""));
@@ -110,7 +107,7 @@ fn render_menu_options(f: &mut Frame, area: Rect, menu: &Menu, title: &str ) {
         .title(title)
         .title_style(
             Style::default()
-                .fg(Color::Yellow)
+                .fg(Color::LightYellow)
                 .add_modifier(Modifier::BOLD),
         );
 
@@ -138,40 +135,15 @@ fn render_game_ttt(f: &mut Frame, game: &GamePlayTTT) {
         .direction(Direction::Vertical)
         .margin(0)
         .constraints([
-            Constraint::Max(3),
-            Constraint::Min(11),
+            Constraint::Max(7),
+            Constraint::Min(9),
             Constraint::Length(4),
         ])
         .split(f.area());
 
-    let mode_name = match game.mode {
-        GameMode::PvE => "Play vs AI",
-        GameMode::LocalPvP => "Local PvP",
-    };
-
-    render_game_mode(mode_name, f, chunks[0]);
+    render_title(f, chunks[0]);
     render_ttt_board(f, chunks[1], game);
     render_ttt_instructions(f, chunks[2], game);
-}
-
-/// Renders the current game mode indicator.
-fn render_game_mode(mode_name: &str, f: &mut Frame, area: Rect) {
-    let width = mode_name.chars().count() as u16 + 5;
-    let title_area = center_rect(area, width, 3);
-    let title = Paragraph::new(mode_name)
-        .style(
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )
-        .alignment(Alignment::Center)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_type(BorderType::HeavyDoubleDashed)
-                .title("Mode"),
-        );
-    f.render_widget(title, title_area);
 }
 
 /// Renders the tic-tac-toe board with current marks and selection highlight.
@@ -193,16 +165,38 @@ fn render_ttt_board(f: &mut Frame, area: Rect, game: &GamePlayTTT) {
         ));
     }
 
-    let game_block = Block::default()
-        .borders(Borders::ALL)
-        .title(status)
-        .title_style(status_style);
+    let mode_name = match game.mode {
+        GameMode::PvE => "Mode: Play vs AI",
+        GameMode::LocalPvP => "Mode: Local PvP",
+    };
+
+    let game_block = game_block(mode_name, status.as_str(), status_style);
 
     let board = Paragraph::new(lines)
         .alignment(Alignment::Center)
         .block(game_block);
 
     f.render_widget(board, board_area);
+}
+
+fn game_block<'a>(mode_name: &'a str, status: &'a str, status_style: Style) -> Block<'a> {
+    Block::default()
+        .borders(Borders::ALL)
+        .title(
+            Line::from(status)
+                .style(status_style)
+                .alignment(Alignment::Center),
+        )
+        .title_style(status_style)
+        .title_bottom(
+            Line::from(mode_name)
+                .style(
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                )
+                .alignment(Alignment::Center),
+        )
 }
 
 fn ttt_board_line(
@@ -246,7 +240,7 @@ fn ttt_board_line(
                         (
                             display,
                             Style::default()
-                                .fg(Color::Yellow)
+                                .fg(Color::LightYellow)
                                 .add_modifier(Modifier::BOLD),
                         )
                     } else {
@@ -293,7 +287,7 @@ fn game_status(game_state: GameState, current_player: Mark) -> (String, Style) {
         GameState::Playing => (
             format!("Current Player: {}", current_player),
             Style::default()
-                .fg(Color::Yellow)
+                .fg(Color::LightYellow)
                 .add_modifier(Modifier::BOLD),
         ),
         GameState::Won(Mark::X) => (
@@ -315,26 +309,21 @@ fn game_status(game_state: GameState, current_player: Mark) -> (String, Style) {
 
 /// Renders the Ultimate Tic-Tac-Toe game screen.
 fn render_game_utt(f: &mut Frame, game: &GamePlayUTT) {
-    if render_size_warning(f, 20, 20) {
+    if render_size_warning(f, 43, 20) {
         return;
     }
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .margin(0)
+        // .margin(0)
         .constraints([
-            Constraint::Max(3),
-            Constraint::Min(25),
+            Constraint::Max(7),
+            Constraint::Min(21),
             Constraint::Length(4),
         ])
         .split(f.area());
 
-    let mode_name = match game.mode {
-        GameMode::PvE => "Play vs AI",
-        GameMode::LocalPvP => "Local PvP",
-    };
-
-    render_game_mode(mode_name, f, chunks[0]);
+    render_title(f, chunks[0]);
     render_utt_board(f, chunks[1], game);
     render_utt_instructions(f, chunks[2], game);
 }
@@ -381,9 +370,9 @@ fn render_utt_board(f: &mut Frame, area: Rect, game: &GamePlayUTT) {
                     match game.selected_cell {
                         Some(position) => (
                             Some((position, game.active_player)),
-                            Style::default().fg(Color::Cyan),
+                            Style::default().fg(Color::Green),
                         ),
-                        None => (None, Style::default().fg(Color::Yellow)),
+                        None => (None, Style::default().fg(Color::LightYellow)),
                     }
                 } else {
                     match small_board.state {
@@ -401,10 +390,12 @@ fn render_utt_board(f: &mut Frame, area: Rect, game: &GamePlayUTT) {
         }
     }
 
-    let game_block = Block::default()
-        .borders(Borders::ALL)
-        .title(status)
-        .title_style(status_style);
+    let mode_name = match game.mode {
+        GameMode::PvE => "Mode: Play vs AI",
+        GameMode::LocalPvP => "Mode: Local PvP",
+    };
+
+    let game_block = game_block(mode_name, status.as_str(), status_style);
 
     let board = Paragraph::new(lines)
         .alignment(Alignment::Center)
@@ -470,7 +461,11 @@ fn render_instructions(f: &mut Frame, area: Rect, instructions: &[String]) {
             Block::default()
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded)
-                .title("Commands"),
+                .title(
+                    Line::from("Commands")
+                        .centered()
+                        .style(Style::default().add_modifier(Modifier::BOLD)),
+                ),
         );
 
     f.render_widget(paragraph, area);
