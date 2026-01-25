@@ -1,5 +1,6 @@
 use crate::game::Board;
 
+#[derive(Clone, Copy)]
 pub struct Position {
     pub row: usize,
     pub col: usize,

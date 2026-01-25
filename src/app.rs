@@ -1,5 +1,6 @@
 use crate::scenes::{
-    GameMode, GamePlayTTT, MAIN_MENU_OPTIONS, Menu, Scene, TTT_MENU_OPTIONS, UTT_MENU_OPTIONS,
+    GameMode, GamePlayTTT, GamePlayUTT, MAIN_MENU_OPTIONS, Menu, Scene, TTT_MENU_OPTIONS,
+    UTT_MENU_OPTIONS,
 };
 
 /// Main application state manager.
@@ -29,6 +30,11 @@ impl App {
         self.current_scene = Scene::PlayingTTT(GamePlayTTT::new(mode));
     }
 
+    /// Starts a new ultimate tic-tac-toe game with the specified mode.
+    pub fn start_utt_game(&mut self, mode: GameMode) {
+        self.current_scene = Scene::PlayingUTT(GamePlayUTT::new(mode));
+    }
+
     /// Goes to the main menu, discarding any active game.
     pub fn go_to_main_menu(&mut self) {
         self.current_scene = Scene::MainMenu(Menu::new(MAIN_MENU_OPTIONS.to_vec()));
@@ -46,15 +52,19 @@ impl App {
 
     /// Handles left arrow or 'h' key input.
     pub fn handle_left(&mut self) {
-        if let Scene::PlayingTTT(game) = &mut self.current_scene {
-            game.input_left();
+        match &mut self.current_scene {
+            Scene::PlayingTTT(game) => game.input_left(),
+            Scene::PlayingUTT(game) => game.input_left(),
+            _ => {}
         }
     }
 
     /// Handles right arrow or 'l' key input.
     pub fn handle_right(&mut self) {
-        if let Scene::PlayingTTT(game) = &mut self.current_scene {
-            game.input_right();
+        match &mut self.current_scene {
+            Scene::PlayingTTT(game) => game.input_right(),
+            Scene::PlayingUTT(game) => game.input_right(),
+            _ => {}
         }
     }
 
@@ -65,6 +75,7 @@ impl App {
         match &mut self.current_scene {
             Scene::MainMenu(menu) | Scene::TTTMenu(menu) | Scene::UTTMenu(menu) => menu.move_up(),
             Scene::PlayingTTT(game) => game.input_up(),
+            Scene::PlayingUTT(game) => game.input_up(),
         }
     }
 
@@ -75,6 +86,7 @@ impl App {
         match &mut self.current_scene {
             Scene::MainMenu(menu) | Scene::TTTMenu(menu) | Scene::UTTMenu(menu) => menu.move_down(),
             Scene::PlayingTTT(game) => game.input_down(),
+            Scene::PlayingUTT(game) => game.input_down(),
         }
     }
 
@@ -96,10 +108,12 @@ impl App {
                 _ => panic!("Option selected in Tic Tac Toe Menu does not exist."),
             },
             Scene::UTTMenu(menu) => match menu.get_selected() {
+                "Local PvP" => self.start_utt_game(GameMode::LocalPvP),
                 "Back" => self.go_to_main_menu(),
                 _ => panic!("Option selected in Ultimate Tic Tac Toe Menu does not exist."),
             },
             Scene::PlayingTTT(game) => game.player_move(),
+            Scene::PlayingUTT(game) => game.input_enter(),
         }
     }
 
@@ -115,6 +129,7 @@ impl App {
     pub fn handle_reset(&mut self) {
         match &mut self.current_scene {
             Scene::PlayingTTT(game) => game.reset_game(),
+            Scene::PlayingUTT(game) => game.reset_game(),
             _ => {}
         }
     }
@@ -122,7 +137,7 @@ impl App {
     /// Handles 'm' key input to return to main menu from game.
     pub fn handle_main_menu(&mut self) {
         match &mut self.current_scene {
-            Scene::PlayingTTT(_) => self.go_to_main_menu(),
+            Scene::PlayingTTT(_) | Scene::PlayingUTT(_) => self.go_to_main_menu(),
             _ => {}
         }
     }

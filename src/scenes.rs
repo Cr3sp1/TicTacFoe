@@ -9,7 +9,7 @@ use crate::utils::{
 
 pub const MAIN_MENU_OPTIONS: [&'static str; 3] = ["Ultimate Tic Tac Toe", "Tic Tac Toe", "Quit"];
 pub const TTT_MENU_OPTIONS: [&'static str; 3] = ["Local PvP", "Play vs AI", "Back"];
-pub const UTT_MENU_OPTIONS: [&'static str; 1] = ["Back"];
+pub const UTT_MENU_OPTIONS: [&'static str; 2] = ["Local PvP", "Back"];
 
 /// Represents all the possible scenes.
 pub enum Scene {
@@ -17,7 +17,7 @@ pub enum Scene {
     TTTMenu(Menu),
     UTTMenu(Menu),
     PlayingTTT(GamePlayTTT),
-    // PlayingUTT(GamePlayUTT),
+    PlayingUTT(GamePlayUTT),
 }
 
 /// Represents the game mode selection.
@@ -225,9 +225,9 @@ impl GamePlayUTT {
         if let Some(cell) = selected_cell {
             let selected_board = big_board.get_board(selected_board.row, selected_board.col);
             f_small(selected_board, cell);
+        } else {
+            f_big(&self.big_board, &mut self.selected_board);
         }
-
-        f_big(&self.big_board, &mut self.selected_board);
     }
 
     /// Moves selected cell left if it exists, else moves the selected board
@@ -250,7 +250,7 @@ impl GamePlayUTT {
         self.input_move(move_selection_down_playable, move_selection_down_playable);
     }
 
-    pub fn handle_enter(&mut self) {
+    pub fn input_enter(&mut self) {
         if self.selected_cell.is_none() {
             let mut cell_position = Position { row: 0, col: 0 };
             let selected_board = self
@@ -304,7 +304,8 @@ impl GamePlayUTT {
                 selected_cell,
             );
         } else {
-            reset_position(&self.big_board, &mut self.selected_board)
+            reset_position(&self.big_board, &mut self.selected_board);
+            self.selected_cell = None;
         }
     }
 
