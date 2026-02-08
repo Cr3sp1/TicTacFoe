@@ -90,7 +90,12 @@ fn render_menu_options(f: &mut Frame, area: Rect, menu: &Menu, title: &str) {
 
     for (i, option) in menu.options.iter().enumerate() {
         let (style, prefix) = if i == menu.selected_option {
-            (Style::default().add_modifier(Modifier::BOLD).fg(Color::LightYellow), "🢒")
+            (
+                Style::default()
+                    .add_modifier(Modifier::BOLD)
+                    .fg(Color::LightYellow),
+                "🢒",
+            )
         } else {
             (Style::default().add_modifier(Modifier::BOLD), " ")
         };

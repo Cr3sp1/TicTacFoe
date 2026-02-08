@@ -1,4 +1,4 @@
-use crate::ai::SimpleAi;
+use crate::ai::simple::SimpleAi;
 use crate::game::base::SmallBoard;
 use crate::game::ultimate::BigBoard;
 use crate::game::{GameState, Mark};
