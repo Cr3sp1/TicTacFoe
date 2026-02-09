@@ -106,7 +106,7 @@ mod tests {
         // Position (0, 2) would be winning move
 
         let ai = SimpleAi::new(Mark::O);
-        let (row, col) = ai.choose_move(board.clone()).unpack_base();
+        let (row, col) = ai.choose_move(board.clone()).unwrap_base();
 
         assert_eq!((row, col), (0, 2));
     }
@@ -120,7 +120,7 @@ mod tests {
         // AI must block at (0, 2)
 
         let ai = SimpleAi::new(Mark::O);
-        let (row, col) = ai.choose_move(board.clone()).unpack_base();
+        let (row, col) = ai.choose_move(board.clone()).unwrap_base();
 
         assert_eq!((row, col), (0, 2));
     }

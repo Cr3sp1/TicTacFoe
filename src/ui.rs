@@ -94,16 +94,15 @@ fn render_menu_options(f: &mut Frame, area: Rect, menu: &Menu, title: &str) {
                 Style::default()
                     .add_modifier(Modifier::BOLD)
                     .fg(Color::LightYellow),
-                "🢒",
+                "  🢒 ",
             )
         } else {
-            (Style::default().add_modifier(Modifier::BOLD), " ")
+            (Style::default().add_modifier(Modifier::BOLD), "    ")
         };
 
-        lines.push(Line::from(vec![Span::styled(
-            format!("{}{}  ", prefix, option),
-            style,
-        )]));
+        lines.push(
+            Line::from(vec![Span::styled(format!("{}{}  ", prefix, option), style)]).left_aligned(),
+        );
         lines.push(Line::from(""));
     }
 

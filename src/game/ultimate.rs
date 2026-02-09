@@ -1,5 +1,7 @@
 use super::base::SmallBoard;
 use super::*;
+use crate::ai::Move::Ultimate;
+use crate::ai::{Game, Move};
 
 /// A 3x3 grid of tic-tac-toe boards for Ultimate Tic-Tac-Toe.
 ///
@@ -160,6 +162,48 @@ impl Board for BigBoard {
     /// True if the board is not complete, else False.
     fn is_playable(&self, row: usize, col: usize) -> bool {
         self.get_board(row, col).state == GameState::Playing
+    }
+}
+
+impl Game for BigBoard {
+    fn play(&mut self, mv: &Move, ai_mark: Mark) {
+        let (board_row, board_col, cell_row, cell_col) = mv.unwrap_ultimate();
+        self.make_move(board_row, board_col, cell_row, cell_col, ai_mark);
+    }
+
+    fn get_possible_moves(&self) -> Vec<Move> {
+        let mut possible_moves = Vec::new();
+        for board_row in 0..3 {
+            for board_col in 0..3 {
+                // if there is an active board skip inactive boards
+                if let Some(active_board) = self.active_board {
+                    if (board_row, board_col) != active_board {
+                        continue;
+                    }
+                }
+
+                let board_moves = self.get_board(board_row, board_col).get_possible_moves();
+                for board_move in board_moves {
+                    let (cell_row, cell_col) = board_move.unwrap_base();
+                    possible_moves.push(Ultimate(board_row, board_col, cell_row, cell_col));
+                }
+            }
+        }
+        possible_moves
+    }
+
+    fn score(&self, mark: Mark) -> i8 {
+        let mut score = 0;
+        for board_row in 0..3 {
+            for board_col in 0..3 {
+                score += self.get_board(board_row, board_col).score(mark);
+            }
+        }
+        score
+    }
+
+    fn get_state(&self) -> GameState {
+        self.state
     }
 }
 

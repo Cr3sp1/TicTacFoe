@@ -109,6 +109,7 @@ impl App {
             },
             Scene::UTTMenu(menu) => match menu.get_selected() {
                 "Local PvP" => self.start_utt_game(GameMode::LocalPvP),
+                "Play vs AI" => self.start_utt_game(GameMode::PvE),
                 "Back" => self.go_to_main_menu(),
                 _ => panic!("Option selected in Ultimate Tic Tac Toe Menu does not exist."),
             },
@@ -134,6 +135,7 @@ impl App {
     pub fn handle_second(&mut self) {
         match &mut self.current_scene {
             Scene::PlayingTTT(game) => game.play_second(),
+            Scene::PlayingUTT(game) => game.play_second(),
             _ => {}
         }
     }

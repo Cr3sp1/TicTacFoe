@@ -1,6 +1,7 @@
 use super::*;
+use crate::ai::Move::Base;
+use crate::ai::{Game, Move};
 use std::fmt;
-
 /// A 3x3 tic-tac-toe board.
 ///
 /// The board is represented as a flat array of 9 cells, where each cell
@@ -114,6 +115,39 @@ impl fmt::Display for SmallBoard {
             }
         }
         Ok(())
+    }
+}
+
+impl Game for SmallBoard {
+    fn play(&mut self, mv: &Move, ai_mark: Mark) {
+        let (row, col) = mv.unwrap_base();
+        self.make_move(row, col, ai_mark);
+    }
+
+    fn get_possible_moves(&self) -> Vec<Move> {
+        let mut possible_moves = Vec::new();
+        if self.state != GameState::Playing {
+            return possible_moves;
+        }
+        for row in 0..3 {
+            for col in 0..3 {
+                if self.is_playable(row, col) {
+                    possible_moves.push(Base(row, col));
+                }
+            }
+        }
+        possible_moves
+    }
+
+    fn score(&self, mark: Mark) -> i8 {
+        if let GameState::Won(winning_mark) = self.state {
+            return if mark == winning_mark { 1 } else { -1 };
+        }
+        0
+    }
+
+    fn get_state(&self) -> GameState {
+        self.state
     }
 }
 

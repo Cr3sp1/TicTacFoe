@@ -1,3 +1,4 @@
+use crate::ai::Game;
 use crate::ai::simple::SimpleAi;
 use crate::game::base::SmallBoard;
 use crate::game::ultimate::BigBoard;
@@ -9,7 +10,7 @@ use crate::utils::{
 
 pub const MAIN_MENU_OPTIONS: [&'static str; 3] = ["Ultimate Tic Tac Toe", "Tic Tac Toe", "Quit"];
 pub const TTT_MENU_OPTIONS: [&'static str; 3] = ["Local PvP", "Play vs AI", "Back"];
-pub const UTT_MENU_OPTIONS: [&'static str; 2] = ["Local PvP", "Back"];
+pub const UTT_MENU_OPTIONS: [&'static str; 3] = ["Local PvP", "Play vs AI", "Back"];
 
 /// Represents all the possible scenes.
 pub enum Scene {
@@ -136,13 +137,13 @@ impl GamePlayTTT {
             return;
         }
 
-        self.active_player = match self.active_player {
-            Mark::X => Mark::O,
-            Mark::O => Mark::X,
-        };
-
         if self.mode == GameMode::PvE {
             self.ai_play();
+        } else {
+            self.active_player = match self.active_player {
+                Mark::X => Mark::O,
+                Mark::O => Mark::X,
+            }
         }
 
         reset_position(&self.board, &mut self.selected);
@@ -151,13 +152,8 @@ impl GamePlayTTT {
     /// Executes the AI's turn in PvE mode.
     fn ai_play(&mut self) {
         if let Some(ai) = &self.ai {
-            let (ai_row, ai_col) = ai.choose_move(self.board.clone()).unpack_base();
+            let (ai_row, ai_col) = ai.choose_move(self.board.clone()).unwrap_base();
             self.board.make_move(ai_row, ai_col, ai.ai_mark);
-
-            self.active_player = match ai.ai_mark {
-                Mark::X => Mark::O,
-                Mark::O => Mark::X,
-            };
 
             self.turn += 1;
 
@@ -192,7 +188,7 @@ pub struct GamePlayUTT {
     pub mode: GameMode,
     pub selected_board: Position,
     pub selected_cell: Option<Position>,
-    // pub ai: Option<SimpleAi>,
+    pub ai: Option<SimpleAi>,
 }
 
 impl GamePlayUTT {
@@ -200,6 +196,12 @@ impl GamePlayUTT {
     ///
     /// For PvE mode, initializes an AI opponent playing as O.
     pub fn new(mode: GameMode) -> Self {
+        let ai = if mode == GameMode::PvE {
+            Some(SimpleAi::new(Mark::O))
+        } else {
+            None
+        };
+
         Self {
             big_board: BigBoard::new(),
             active_player: Mark::X,
@@ -207,6 +209,7 @@ impl GamePlayUTT {
             mode,
             selected_board: Position { row: 0, col: 0 },
             selected_cell: None,
+            ai,
         }
     }
 
@@ -296,20 +299,29 @@ impl GamePlayUTT {
             return;
         }
 
-        self.active_player = match self.active_player {
-            Mark::X => Mark::O,
-            Mark::O => Mark::X,
-        };
+        if self.mode == GameMode::PvE {
+            self.ai_play();
+        } else {
+            self.active_player = match self.active_player {
+                Mark::X => Mark::O,
+                Mark::O => Mark::X,
+            }
+        }
 
+        self.reset_selection()
+    }
+
+    fn reset_selection(&mut self) {
         // If next action is constrained to active board, select it by default
         if let Some((active_row, active_col)) = self.big_board.active_board {
             self.selected_board = Position {
                 row: active_row,
                 col: active_col,
             };
+            self.selected_cell = Some(Position { row: 0, col: 0 });
             reset_position(
                 self.big_board.get_board(active_row, active_col),
-                selected_cell,
+                self.selected_cell.as_mut().unwrap(),
             );
         } else {
             reset_position(&self.big_board, &mut self.selected_board);
@@ -324,6 +336,27 @@ impl GamePlayUTT {
         self.turn = 0;
         self.selected_board = Position { row: 0, col: 0 };
         self.selected_cell = None;
+    }
+
+    /// Executes the AI's turn in PvE mode.
+    fn ai_play(&mut self) {
+        if let Some(ai) = &self.ai {
+            let mv = ai.choose_move(self.big_board.clone());
+            self.big_board.play(&mv, ai.ai_mark);
+
+            self.turn += 1;
+
+            self.reset_selection();
+        } else {
+            panic!("Error: no AI is available.");
+        }
+    }
+
+    /// Allows the AI to play first if the game just started.
+    pub fn play_second(&mut self) {
+        if self.big_board.state == GameState::Playing && self.turn == 0 {
+            self.ai_play();
+        }
     }
 }
 
