@@ -1,10 +1,6 @@
-use crate::game::base::SmallBoard;
-use crate::game::{Board, GameState, Mark};
+use crate::ai::{Game, Move};
+use crate::game::Mark;
 use rand::prelude::*;
-use std::vec::Vec;
-
-/// An AI that picks a random move each turn
-pub struct RandomAI {}
 
 /// A simple AI opponent for Tic-Tac-Toe that uses basic strategy.
 ///
@@ -14,7 +10,7 @@ pub struct RandomAI {}
 /// 3. Choose randomly from available positions
 pub struct SimpleAi {
     pub ai_mark: Mark,
-    player_mark: Mark,
+    enemy_mark: Mark,
 }
 
 impl SimpleAi {
@@ -32,7 +28,7 @@ impl SimpleAi {
     pub fn new(ai_mark: Mark) -> SimpleAi {
         SimpleAi {
             ai_mark,
-            player_mark: match ai_mark {
+            enemy_mark: match ai_mark {
                 Mark::O => Mark::X,
                 Mark::X => Mark::O,
             },
@@ -49,64 +45,57 @@ impl SimpleAi {
     ///
     /// # Panics
     /// Panics if there are no available moves on the board
-    pub fn choose_move(&self, mut board: SmallBoard) -> (usize, usize) {
+    pub fn choose_move<T>(&self, board: T) -> Move
+    where
+        T: Game + Clone,
+    {
         // find all available moves
-        let available = available_moves(&board);
-        if available.is_empty() {
+        let ai_moves = board.get_possible_moves();
+        if ai_moves.is_empty() {
             panic!("No available moves found by SimpleAi");
         }
+        let mut non_losing_moves = ai_moves.clone();
 
-        // check for available wins
-        for &(row, col) in available.iter() {
-            board.make_move(row, col, self.ai_mark);
-            if board.state == GameState::Won(self.ai_mark) {
-                return (row, col);
+        // save original board score
+        let original_ai_score = board.score(self.ai_mark);
+
+        // check result of all for available moves starting from the last in moves vectors
+        'outer: for (i, mv) in ai_moves.iter().enumerate().rev() {
+            let mut board_i = board.clone();
+            board_i.play(mv, self.ai_mark);
+
+            // if a move improves score (wins a board) play it
+            if board_i.score(self.ai_mark) > original_ai_score {
+                return *mv;
             }
-            board.set(row, col, None);
-            board.state = GameState::Playing;
+            // else check that the move doesn't let the enemy win
+            let enemy_moves = board_i.get_possible_moves();
+            for enemy_mv in enemy_moves.iter() {
+                let mut board_j = board_i.clone();
+                board_j.play(enemy_mv, self.enemy_mark);
+                // if score is worse than the starting one the move is a losing one
+                if board_j.score(self.ai_mark) < original_ai_score {
+                    non_losing_moves.remove(i);
+                    continue 'outer;
+                }
+            }
         }
 
-        // check for possible losses
-        for &(row, col) in available.iter() {
-            board.make_move(row, col, self.player_mark);
-            if board.state == GameState::Won(self.player_mark) {
-                return (row, col);
-            }
-            board.set(row, col, None);
-            board.state = GameState::Playing;
-        }
-
-        // move at random
         let mut rng = rand::rng();
-        *available.choose(&mut rng).unwrap()
-    }
-}
 
-/// Returns a list of all empty positions on the board.
-///
-/// # Arguments
-/// * `board` - The board to check for available moves
-///
-/// # Returns
-/// A vector of (row, col) tuples representing empty positions
-fn available_moves(board: &SmallBoard) -> Vec<(usize, usize)> {
-    let mut moves: Vec<(usize, usize)> = Vec::new();
-    for row in 0..3 {
-        for col in 0..3 {
-            if board.get(row, col).is_none() {
-                moves.push((row, col));
-            }
+        // if there are non-losing moves return one of them
+        if let Some(mv) = non_losing_moves.choose(&mut rng) {
+            return *mv;
         }
+        // else move at random
+        *ai_moves.choose(&mut rng).unwrap()
     }
-    moves
 }
-
-/// An AI that use Monte Carlo Tree search to play
-pub struct MCTSAi {}
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::game::base::SmallBoard;
 
     #[test]
     fn test_ai_takes_winning_move() {
@@ -117,7 +106,7 @@ mod tests {
         // Position (0, 2) would be winning move
 
         let ai = SimpleAi::new(Mark::O);
-        let (row, col) = ai.choose_move(board.clone());
+        let (row, col) = ai.choose_move(board.clone()).unpack_base();
 
         assert_eq!((row, col), (0, 2));
     }
@@ -131,7 +120,7 @@ mod tests {
         // AI must block at (0, 2)
 
         let ai = SimpleAi::new(Mark::O);
-        let (row, col) = ai.choose_move(board.clone());
+        let (row, col) = ai.choose_move(board.clone()).unpack_base();
 
         assert_eq!((row, col), (0, 2));
     }

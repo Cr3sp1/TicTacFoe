@@ -151,7 +151,7 @@ impl GamePlayTTT {
     /// Executes the AI's turn in PvE mode.
     fn ai_play(&mut self) {
         if let Some(ai) = &self.ai {
-            let (ai_row, ai_col) = ai.choose_move(self.board.clone());
+            let (ai_row, ai_col) = ai.choose_move(self.board.clone()).unpack_base();
             self.board.make_move(ai_row, ai_col, ai.ai_mark);
 
             self.active_player = match ai.ai_mark {
