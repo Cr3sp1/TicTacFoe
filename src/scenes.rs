@@ -1,5 +1,5 @@
-use crate::ai::Game;
 use crate::ai::simple::SimpleAi;
+use crate::ai::{AI, Game};
 use crate::game::base::SmallBoard;
 use crate::game::ultimate::BigBoard;
 use crate::game::{GameState, Mark};
@@ -70,7 +70,7 @@ pub struct GamePlayTTT {
     pub turn: u32,
     pub mode: GameMode,
     pub selected: Position,
-    pub ai: Option<SimpleAi>,
+    pub ai: Option<AI>,
 }
 
 impl GamePlayTTT {
@@ -79,7 +79,7 @@ impl GamePlayTTT {
     /// For PvE mode, initializes an AI opponent playing as O.
     pub fn new(mode: GameMode) -> Self {
         let ai = if mode == GameMode::PvE {
-            Some(SimpleAi::new(Mark::O))
+            Some(AI::Medium(SimpleAi::new(Mark::O)))
         } else {
             None
         };
@@ -153,7 +153,7 @@ impl GamePlayTTT {
     fn ai_play(&mut self) {
         if let Some(ai) = &self.ai {
             let (ai_row, ai_col) = ai.choose_move(self.board.clone()).unwrap_base();
-            self.board.make_move(ai_row, ai_col, ai.ai_mark);
+            self.board.make_move(ai_row, ai_col, ai.get_mark());
 
             self.turn += 1;
 

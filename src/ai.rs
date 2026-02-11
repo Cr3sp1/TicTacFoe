@@ -3,7 +3,33 @@ pub mod random;
 pub mod simple;
 
 use crate::ai::Move::{Base, Ultimate};
+use crate::ai::random::random_move;
+use crate::ai::simple::SimpleAi;
 use crate::game::{GameState, Mark};
+
+pub enum AI {
+    Weak(Mark),
+    Medium(SimpleAi),
+}
+
+impl AI {
+    pub fn choose_move<T>(&self, board: T) -> Move
+    where
+        T: Game + Clone,
+    {
+        match &self {
+            AI::Weak(_) => random_move(board),
+            AI::Medium(ai) => ai.choose_move(board),
+        }
+    }
+
+    pub fn get_mark(&self) -> Mark {
+        match &self {
+            AI::Weak(mark) => *mark,
+            AI::Medium(ai) => ai.ai_mark,
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug)]
 pub enum Move {
