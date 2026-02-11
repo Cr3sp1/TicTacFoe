@@ -1,4 +1,3 @@
-use crate::ai::simple::SimpleAi;
 use crate::ai::{AI, Game};
 use crate::game::base::SmallBoard;
 use crate::game::ultimate::BigBoard;
@@ -11,20 +10,27 @@ use crate::utils::{
 pub const MAIN_MENU_OPTIONS: [&'static str; 3] = ["Ultimate Tic Tac Toe", "Tic Tac Toe", "Quit"];
 pub const TTT_MENU_OPTIONS: [&'static str; 3] = ["Local PvP", "Play vs AI", "Back"];
 pub const UTT_MENU_OPTIONS: [&'static str; 3] = ["Local PvP", "Play vs AI", "Back"];
+pub const AI_MENU_OPTIONS: [&'static str; 3] = ["Weak", "Medium", "Back"];
 
 /// Represents all the possible scenes.
 pub enum Scene {
     MainMenu(Menu),
     TTTMenu(Menu),
     UTTMenu(Menu),
+    AIMenu(Menu, AIMenuStatus),
     PlayingTTT(GamePlayTTT),
     PlayingUTT(GamePlayUTT),
+}
+
+pub enum AIMenuStatus {
+    TTTpve,
+    UTTpve,
 }
 
 /// Represents the game mode selection.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum GameMode {
-    PvE,
+    PvE(AI),
     LocalPvP,
 }
 
@@ -70,27 +76,17 @@ pub struct GamePlayTTT {
     pub turn: u32,
     pub mode: GameMode,
     pub selected: Position,
-    pub ai: Option<AI>,
 }
 
 impl GamePlayTTT {
     /// Creates a new game with the specified mode.
-    ///
-    /// For PvE mode, initializes an AI opponent playing as O.
     pub fn new(mode: GameMode) -> Self {
-        let ai = if mode == GameMode::PvE {
-            Some(AI::Medium(SimpleAi::new(Mark::O)))
-        } else {
-            None
-        };
-
         Self {
             board: SmallBoard::new(),
             active_player: Mark::X,
             turn: 0,
             mode,
             selected: Position { row: 0, col: 0 },
-            ai,
         }
     }
 
@@ -137,12 +133,15 @@ impl GamePlayTTT {
             return;
         }
 
-        if self.mode == GameMode::PvE {
-            self.ai_play();
-        } else {
-            self.active_player = match self.active_player {
-                Mark::X => Mark::O,
-                Mark::O => Mark::X,
+        match self.mode {
+            GameMode::PvE(_) => {
+                self.ai_play();
+            }
+            GameMode::LocalPvP => {
+                self.active_player = match self.active_player {
+                    Mark::X => Mark::O,
+                    Mark::O => Mark::X,
+                }
             }
         }
 
@@ -151,7 +150,7 @@ impl GamePlayTTT {
 
     /// Executes the AI's turn in PvE mode.
     fn ai_play(&mut self) {
-        if let Some(ai) = &self.ai {
+        if let GameMode::PvE(ai) = &self.mode {
             let (ai_row, ai_col) = ai.choose_move(self.board.clone()).unwrap_base();
             self.board.make_move(ai_row, ai_col, ai.get_mark());
 
@@ -188,7 +187,6 @@ pub struct GamePlayUTT {
     pub mode: GameMode,
     pub selected_board: Position,
     pub selected_cell: Option<Position>,
-    pub ai: Option<SimpleAi>,
 }
 
 impl GamePlayUTT {
@@ -196,12 +194,6 @@ impl GamePlayUTT {
     ///
     /// For PvE mode, initializes an AI opponent playing as O.
     pub fn new(mode: GameMode) -> Self {
-        let ai = if mode == GameMode::PvE {
-            Some(SimpleAi::new(Mark::O))
-        } else {
-            None
-        };
-
         Self {
             big_board: BigBoard::new(),
             active_player: Mark::X,
@@ -209,7 +201,6 @@ impl GamePlayUTT {
             mode,
             selected_board: Position { row: 0, col: 0 },
             selected_cell: None,
-            ai,
         }
     }
 
@@ -299,12 +290,15 @@ impl GamePlayUTT {
             return;
         }
 
-        if self.mode == GameMode::PvE {
-            self.ai_play();
-        } else {
-            self.active_player = match self.active_player {
-                Mark::X => Mark::O,
-                Mark::O => Mark::X,
+        match self.mode {
+            GameMode::PvE(_) => {
+                self.ai_play();
+            }
+            GameMode::LocalPvP => {
+                self.active_player = match self.active_player {
+                    Mark::X => Mark::O,
+                    Mark::O => Mark::X,
+                }
             }
         }
 
@@ -340,9 +334,9 @@ impl GamePlayUTT {
 
     /// Executes the AI's turn in PvE mode.
     fn ai_play(&mut self) {
-        if let Some(ai) = &self.ai {
+        if let GameMode::PvE(ai) = &self.mode {
             let mv = ai.choose_move(self.big_board.clone());
-            self.big_board.play(&mv, ai.ai_mark);
+            self.big_board.play(&mv, ai.get_mark());
 
             self.turn += 1;
 
@@ -404,14 +398,12 @@ mod tests {
         assert_eq!(game.active_player, Mark::X);
         assert_eq!(game.board.state, GameState::Playing);
         assert_eq!(game.turn, 0);
-        assert!(game.ai.is_none());
     }
 
     #[test]
     fn test_gameplay_new_pve() {
-        let game = GamePlayTTT::new(GameMode::PvE);
-        assert_eq!(game.mode, GameMode::PvE);
-        assert!(game.ai.is_some());
+        let game = GamePlayTTT::new(GameMode::PvE(AI::Weak(Mark::X)));
+        assert_eq!(game.mode, GameMode::PvE(AI::Weak(Mark::X)));
     }
 
     #[test]

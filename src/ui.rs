@@ -18,6 +18,7 @@ pub fn render(f: &mut Frame, app: &App) {
     match &app.current_scene {
         Scene::MainMenu(menu) => render_menu(f, menu, "Select Game"),
         Scene::TTTMenu(menu) | Scene::UTTMenu(menu) => render_menu(f, menu, "Select Game Mode"),
+        Scene::AIMenu(menu, _) => render_menu(f, menu, "Select AI Strength"),
         Scene::PlayingTTT(game) => render_game_ttt(f, game),
         Scene::PlayingUTT(game) => render_game_utt(f, game),
     }
@@ -170,7 +171,7 @@ fn render_ttt_board(f: &mut Frame, area: Rect, game: &GamePlayTTT) {
     }
 
     let mode_name = match game.mode {
-        GameMode::PvE => "Mode: Play vs AI",
+        GameMode::PvE(_) => "Mode: Play vs AI",
         GameMode::LocalPvP => "Mode: Local PvP",
     };
 
@@ -268,14 +269,14 @@ fn ttt_board_line(
 /// Renders context-appropriate instructions for the game screen.
 fn render_ttt_instructions(f: &mut Frame, area: Rect, game: &GamePlayTTT) {
     let instructions = if game.board.state == GameState::Playing {
-        if game.turn == 0 && game.mode == GameMode::PvE {
+        if game.turn != 0 || game.mode == GameMode::LocalPvP {
             vec![
-                "S: Play Second | Arrow Keys: Move | Enter: Place Mark".to_string(),
+                "Arrow Keys: Move | Enter: Place Mark".to_string(),
                 "R: Reset Game | M: Main Menu | Q: Quit".to_string(),
             ]
         } else {
             vec![
-                "Arrow Keys: Move | Enter: Place Mark".to_string(),
+                "S: Play Second | Arrow Keys: Move | Enter: Place Mark".to_string(),
                 "R: Reset Game | M: Main Menu | Q: Quit".to_string(),
             ]
         }
@@ -395,7 +396,7 @@ fn render_utt_board(f: &mut Frame, area: Rect, game: &GamePlayUTT) {
     }
 
     let mode_name = match game.mode {
-        GameMode::PvE => "Mode: Play vs AI",
+        GameMode::PvE(_) => "Mode: Play vs AI",
         GameMode::LocalPvP => "Mode: Local PvP",
     };
 

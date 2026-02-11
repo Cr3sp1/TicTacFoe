@@ -7,6 +7,7 @@ use crate::ai::random::random_move;
 use crate::ai::simple::SimpleAi;
 use crate::game::{GameState, Mark};
 
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum AI {
     Weak(Mark),
     Medium(SimpleAi),

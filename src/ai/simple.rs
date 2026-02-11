@@ -8,6 +8,7 @@ use rand::prelude::*;
 /// 1. Win if possible
 /// 2. Block opponent's winning move
 /// 3. Choose randomly from available positions
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SimpleAi {
     pub ai_mark: Mark,
     enemy_mark: Mark,
