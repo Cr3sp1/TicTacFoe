@@ -1,6 +1,8 @@
+use crate::ai::AI;
 use crate::ai::AI::{Medium, Weak};
 use crate::ai::simple::SimpleAi;
-use crate::game::Mark::{O};
+use crate::game::Mark;
+use crate::game::Mark::{O, X};
 use crate::scenes::{
     AI_MENU_OPTIONS, AIMenuStatus, GameMode, GamePlayTTT, GamePlayUTT, MAIN_MENU_OPTIONS, Menu,
     Scene, TTT_MENU_OPTIONS, UTT_MENU_OPTIONS,
@@ -118,27 +120,59 @@ impl App {
             Scene::TTTMenu(menu) => match menu.get_selected() {
                 "Local PvP" => self.start_ttt_game(GameMode::LocalPvP),
                 "Play vs AI" => self.go_to_ai_menu(AIMenuStatus::TTTpve),
+                "AI vs AI" => self.go_to_ai_menu(AIMenuStatus::TTTeve(None)),
                 "Back" => self.go_to_main_menu(),
                 _ => panic!("Option selected in Tic Tac Toe Menu does not exist."),
             },
             Scene::UTTMenu(menu) => match menu.get_selected() {
                 "Local PvP" => self.start_utt_game(GameMode::LocalPvP),
                 "Play vs AI" => self.go_to_ai_menu(AIMenuStatus::UTTpve),
+                "AI vs AI" => self.go_to_ai_menu(AIMenuStatus::UTTeve(None)),
                 "Back" => self.go_to_main_menu(),
                 _ => panic!("Option selected in Ultimate Tic Tac Toe Menu does not exist."),
             },
-            Scene::AIMenu(menu, status) => match (menu.get_selected(), status) {
-                ("Weak", AIMenuStatus::TTTpve) => self.start_ttt_game(GameMode::PvE(Weak(O))),
-                ("Weak", AIMenuStatus::UTTpve) => self.start_utt_game(GameMode::PvE(Weak(O))),
-                ("Medium", AIMenuStatus::TTTpve) => {
-                    self.start_ttt_game(GameMode::PvE(Medium(SimpleAi::new(O))))
+            Scene::AIMenu(menu, status) => {
+                let selected_option = menu.get_selected();
+                if selected_option == "Back" {
+                    match &status {
+                        AIMenuStatus::TTTpve => self.go_to_ttt_menu(),
+                        AIMenuStatus::TTTeve(None) => self.go_to_ttt_menu(),
+                        AIMenuStatus::TTTeve(Some(_)) => {
+                            self.go_to_ai_menu(AIMenuStatus::TTTeve(None))
+                        }
+                        AIMenuStatus::UTTpve => self.go_to_utt_menu(),
+                        AIMenuStatus::UTTeve(None) => self.go_to_utt_menu(),
+                        AIMenuStatus::UTTeve(Some(_)) => {
+                            self.go_to_ai_menu(AIMenuStatus::UTTeve(None))
+                        }
+                    }
+                    return;
                 }
-                ("Medium", AIMenuStatus::UTTpve) => {
-                    self.start_ttt_game(GameMode::PvE(Medium(SimpleAi::new(O))))
+                let new_ai = match selected_option {
+                    "Weak" => |mark: Mark| -> AI { Weak(mark) },
+                    "Medium" => |mark: Mark| -> AI { Medium(SimpleAi::new(mark)) },
+                    _ => panic!("Option selected in AI Menu does not exist."),
+                };
+                match status {
+                    AIMenuStatus::TTTpve => self.start_ttt_game(GameMode::PvE(new_ai(X))),
+                    AIMenuStatus::UTTpve => self.start_utt_game(GameMode::PvE(new_ai(X))),
+                    AIMenuStatus::TTTeve(None) => {
+                        self.go_to_ai_menu(AIMenuStatus::TTTeve(Some(new_ai(X))))
+                    }
+                    AIMenuStatus::TTTeve(Some(ai_x)) => {
+                        let new_mode = GameMode::EvE(ai_x.clone(), new_ai(O));
+                        self.start_ttt_game(new_mode);
+                    }
+                    AIMenuStatus::UTTeve(None) => {
+                        self.go_to_ai_menu(AIMenuStatus::UTTeve(Some(new_ai(X))))
+                    }
+                    AIMenuStatus::UTTeve(Some(ai_x)) => {
+                        let new_mode = GameMode::EvE(ai_x.clone(), new_ai(O));
+                        self.start_utt_game(new_mode);
+                    }
                 }
-                (_, _) => panic!("Option selected in AI Menu does not exist."),
-            },
-            Scene::PlayingTTT(game) => game.player_move(),
+            }
+            Scene::PlayingTTT(game) => game.play_move(),
             Scene::PlayingUTT(game) => game.input_enter(),
         }
     }
@@ -153,7 +187,11 @@ impl App {
             Scene::UTTMenu(_) => self.go_to_main_menu(),
             Scene::AIMenu(_, status) => match status {
                 AIMenuStatus::TTTpve => self.go_to_ttt_menu(),
+                AIMenuStatus::TTTeve(None) => self.go_to_ttt_menu(),
+                AIMenuStatus::TTTeve(Some(_)) => self.go_to_ai_menu(AIMenuStatus::TTTeve(None)),
                 AIMenuStatus::UTTpve => self.go_to_utt_menu(),
+                AIMenuStatus::UTTeve(None) => self.go_to_utt_menu(),
+                AIMenuStatus::UTTeve(Some(_)) => self.go_to_ai_menu(AIMenuStatus::UTTeve(None)),
             },
             Scene::PlayingUTT(game) => game.input_esc(),
             Scene::PlayingTTT(_) => {}
@@ -195,7 +233,7 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::game::{Mark::X, Board};
+    use crate::game::{Board, Mark::X};
 
     #[test]
     fn test_app_new_starts_at_menu() {
@@ -248,6 +286,7 @@ mod tests {
         app.handle_down();
         app.handle_enter();
         app.handle_enter();
+        app.handle_enter();
 
         assert!(matches!(app.current_scene, Scene::PlayingTTT(_)));
     }
@@ -259,7 +298,7 @@ mod tests {
 
         // Make a move
         if let Scene::PlayingTTT(game) = &mut app.current_scene {
-            game.player_move();
+            game.play_move();
             assert!(game.turn > 0);
             assert!(game.board.get(0, 0).is_some());
         }
