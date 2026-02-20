@@ -154,8 +154,8 @@ impl App {
                     _ => panic!("Option selected in AI Menu does not exist."),
                 };
                 match status {
-                    AIMenuStatus::TTTpve => self.start_ttt_game(GameMode::PvE(new_ai(X))),
-                    AIMenuStatus::UTTpve => self.start_utt_game(GameMode::PvE(new_ai(X))),
+                    AIMenuStatus::TTTpve => self.start_ttt_game(GameMode::PvE(new_ai(O))),
+                    AIMenuStatus::UTTpve => self.start_utt_game(GameMode::PvE(new_ai(O))),
                     AIMenuStatus::TTTeve(None) => {
                         self.go_to_ai_menu(AIMenuStatus::TTTeve(Some(new_ai(X))))
                     }

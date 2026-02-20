@@ -6,7 +6,7 @@ use std::fmt;
 ///
 /// The board is represented as a flat array of 9 cells, where each cell
 /// can contain either a mark (X or O) or be empty (None).
-#[derive(Copy, Clone)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SmallBoard {
     cells: [Option<Mark>; 9],
     pub state: GameState,

@@ -6,7 +6,7 @@ use crate::ai::{Game, Move};
 /// A 3x3 grid of tic-tac-toe boards for Ultimate Tic-Tac-Toe.
 ///
 /// The board is represented as a flat array of 9 small boards.
-#[derive(Copy, Clone)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BigBoard {
     boards: [SmallBoard; 9],
     pub state: GameState,

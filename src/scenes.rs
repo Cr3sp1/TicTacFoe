@@ -30,7 +30,7 @@ pub enum AIMenuStatus {
 }
 
 /// Represents the game mode selection.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum GameMode {
     PvE(AI),
     EvE(AI, AI),
@@ -134,55 +134,59 @@ impl GamePlayTTT {
                     .make_move(self.selected.row, self.selected.col, self.active_player);
                 self.turn += 1;
 
+                self.active_player = match self.active_player {
+                    Mark::X => Mark::O,
+                    Mark::O => Mark::X,
+                };
+
                 if self.board.state != GameState::Playing {
                     return;
                 }
             }
         };
 
-        match self.mode {
-            GameMode::LocalPvP => {
+        self.ai_play();
+
+        reset_position(&self.board, &mut self.selected);
+    }
+
+    /// Executes the AI's turn in PvE and EvE modes.
+    fn ai_play(&mut self) {
+        match &mut self.mode {
+            GameMode::LocalPvP => return,
+            GameMode::PvE(ai) => {
+                let (ai_row, ai_col) = ai.choose_move(self.board).unwrap_base();
+                self.board.make_move(ai_row, ai_col, ai.get_mark());
+
+                self.turn += 1;
+                self.active_player = match self.active_player {
+                    Mark::X => Mark::O,
+                    Mark::O => Mark::X,
+                };
+
+                reset_position(&self.board, &mut self.selected);
+            }
+            GameMode::EvE(ai_x, ai_o) => {
+                let (ai_row, ai_col) = match self.active_player {
+                    Mark::X => ai_x.choose_move(self.board).unwrap_base(),
+                    Mark::O => ai_o.choose_move(self.board).unwrap_base(),
+                };
+                self.board.make_move(ai_row, ai_col, self.active_player);
+
+                self.turn += 1;
                 self.active_player = match self.active_player {
                     Mark::X => Mark::O,
                     Mark::O => Mark::X,
                 }
             }
-            GameMode::PvE(ai) => {
-                self.ai_play(&ai);
-            }
-            GameMode::EvE(ai_x, ai_o) => match self.active_player {
-                Mark::X => {
-                    self.ai_play(&ai_x);
-                    self.active_player = Mark::O;
-                }
-                Mark::O => {
-                    self.ai_play(&ai_o);
-                    self.active_player = Mark::X;
-                }
-            },
         }
-
-        reset_position(&self.board, &mut self.selected);
-    }
-
-    /// Executes the AI's turn in PvE mode.
-    fn ai_play(&mut self, ai: &AI) {
-        let (ai_row, ai_col) = ai.choose_move(self.board.clone()).unwrap_base();
-        self.board.make_move(ai_row, ai_col, ai.get_mark());
-
-        self.turn += 1;
-
-        reset_position(&self.board, &mut self.selected);
     }
 
     /// Allows the O player to play first if the game just started.
     pub fn play_second(&mut self) {
         if self.board.state == GameState::Playing && self.turn == 0 {
-            match self.mode {
-                GameMode::PvE(ai) => self.ai_play(&ai),
-                GameMode::EvE(_, ai_o) => self.ai_play(&ai_o),
-                _ => {}
-            }
+            self.active_player = Mark::O;
+            self.ai_play();
         }
     }
 
@@ -305,34 +309,19 @@ impl GamePlayUTT {
                 );
 
                 self.turn += 1;
-            }
-        };
 
-        if self.big_board.state != GameState::Playing {
-            return;
-        }
-
-        match self.mode {
-            GameMode::LocalPvP => {
                 self.active_player = match self.active_player {
                     Mark::X => Mark::O,
                     Mark::O => Mark::X,
+                };
+
+                if self.big_board.state != GameState::Playing {
+                    return;
                 }
             }
-            GameMode::PvE(ai) => {
-                self.ai_play(&ai);
-            }
-            GameMode::EvE(ai_x, ai_o) => match self.active_player {
-                Mark::X => {
-                    self.ai_play(&ai_x);
-                    self.active_player = Mark::O;
-                }
-                Mark::O => {
-                    self.ai_play(&ai_o);
-                    self.active_player = Mark::X;
-                }
-            },
-        }
+        };
+
+        self.ai_play();
 
         self.reset_selection()
     }
@@ -364,24 +353,43 @@ impl GamePlayUTT {
         self.selected_cell = None;
     }
 
-    /// Executes the AI's turn in PvE mode.
-    fn ai_play(&mut self, ai: &AI) {
-        let mv = ai.choose_move(self.big_board.clone());
-        self.big_board.play(&mv, ai.get_mark());
+    /// Executes the AI's turn in PvE and EvE modes.
+    fn ai_play(&mut self) {
+        match &mut self.mode {
+            GameMode::LocalPvP => return,
+            GameMode::PvE(ai) => {
+                let mv = ai.choose_move(self.big_board);
+                self.big_board.play(&mv, ai.get_mark());
 
-        self.turn += 1;
+                self.turn += 1;
+                self.active_player = match self.active_player {
+                    Mark::X => Mark::O,
+                    Mark::O => Mark::X,
+                };
 
-        self.reset_selection();
+                self.reset_selection();
+            }
+            GameMode::EvE(ai_x, ai_o) => {
+                let mv = match self.active_player {
+                    Mark::X => ai_x.choose_move(self.big_board),
+                    Mark::O => ai_o.choose_move(self.big_board),
+                };
+                self.big_board.play(&mv, self.active_player);
+
+                self.turn += 1;
+                self.active_player = match self.active_player {
+                    Mark::X => Mark::O,
+                    Mark::O => Mark::X,
+                }
+            }
+        }
     }
 
     /// Allows the AI to play first if the game just started.
     pub fn play_second(&mut self) {
         if self.big_board.state == GameState::Playing && self.turn == 0 {
-            match self.mode {
-                GameMode::PvE(ai) => self.ai_play(&ai),
-                GameMode::EvE(_, ai_o) => self.ai_play(&ai_o),
-                _ => {}
-            }
+            self.active_player = Mark::O;
+            self.ai_play();
         }
     }
 }

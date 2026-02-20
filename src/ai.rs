@@ -3,14 +3,19 @@ pub mod random;
 pub mod simple;
 
 use crate::ai::Move::{Base, Ultimate};
+use crate::ai::mcts::MCTSAi;
 use crate::ai::random::random_move;
 use crate::ai::simple::SimpleAi;
+use crate::game::base::SmallBoard;
+use crate::game::ultimate::BigBoard;
 use crate::game::{GameState, Mark};
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum AI {
     Weak(Mark),
     Medium(SimpleAi),
+    StrongSmall(MCTSAi<SmallBoard>),
+    StrongBig(MCTSAi<BigBoard>),
 }
 
 impl AI {
@@ -21,6 +26,7 @@ impl AI {
         match &self {
             AI::Weak(_) => random_move(board),
             AI::Medium(ai) => ai.choose_move(board),
+            _ => random_move(board),
         }
     }
 
@@ -28,6 +34,8 @@ impl AI {
         match &self {
             AI::Weak(mark) => *mark,
             AI::Medium(ai) => ai.ai_mark,
+            AI::StrongSmall(ai) => ai.ai_mark,
+            AI::StrongBig(ai) => ai.ai_mark,
         }
     }
 }
