@@ -1,13 +1,13 @@
 [package]
 name = "tic-tac-foe"
-description = "A tui to play tic-tac-toe."
-version = "0.2.0"
+description = "A tui to play Ultimate tic-tac-toe against human or AI opponents."
+version = "1.0.0"
 edition = "2024"
 license = "MIT"
 readme = "README.md"
 authors = ["Cr3sp1"]
 repository = "https://github.com/Cr3sp1/TicTacFoe"
-keywords = ["game", "tui", "tic-tac-toe"]
+keywords = ["game", "tui", "tic-tac-toe", "utt", "ai"]
 categories =["games",]
 
 [dependencies]

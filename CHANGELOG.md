@@ -1,5 +1,7 @@
 # Changelog
 
+## [1.0.0] - 2026/02/28
+
 ### Added
 - Strong AI that implements the Monte Carlo Tree Search algorithm [#3](https://github.com/Cr3sp1/TicTacFoe/pull/3).
 - AI vs AI mode [#3](https://github.com/Cr3sp1/TicTacFoe/pull/3).
