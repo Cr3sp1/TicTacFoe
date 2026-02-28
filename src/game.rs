@@ -10,6 +10,16 @@ pub enum Mark {
     O,
 }
 
+impl Mark {
+    /// Return opposite mark.
+    pub fn switch(&self) -> Mark {
+        match self {
+            Mark::X => Mark::O,
+            Mark::O => Mark::X,
+        }
+    }
+}
+
 impl fmt::Display for Mark {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {

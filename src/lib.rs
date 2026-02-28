@@ -1,3 +1,5 @@
+extern crate core;
+
 pub mod ai;
 pub mod app;
 pub mod game;

@@ -1,147 +1,95 @@
+pub mod mcts;
+pub mod random;
+pub mod simple;
+
+use crate::ai::Move::{Base, Ultimate};
+use crate::ai::mcts::MCTSAi;
+use crate::ai::random::random_move;
+use crate::ai::simple::SimpleAi;
 use crate::game::base::SmallBoard;
-use crate::game::{Board, GameState, Mark};
-use rand::prelude::*;
-use std::vec::Vec;
+use crate::game::ultimate::BigBoard;
+use crate::game::{GameState, Mark};
 
-/// A simple AI opponent for Tic-Tac-Toe that uses basic strategy.
-///
-/// The AI prioritizes moves in the following order:
-/// 1. Win if possible
-/// 2. Block opponent's winning move
-/// 3. Choose randomly from available positions
-pub struct SimpleAi {
-    pub ai_mark: Mark,
-    player_mark: Mark,
+#[derive(Clone, Debug, PartialEq)]
+pub enum AI {
+    Weak(Mark),
+    Medium(SimpleAi),
+    StrongTTT(MCTSAi<SmallBoard>),
+    StrongUTT(MCTSAi<BigBoard>),
 }
 
-impl SimpleAi {
-    /// Creates a new SimpleAi with the given mark.
-    ///
-    /// # Arguments
-    /// * `ai_mark` - The mark (X or O) that the AI will play as
-    ///
-    /// # Example
-    /// ```
-    /// use tic_tac_foe::{ai::SimpleAi, game::Mark};
-    /// let ai = SimpleAi::new(Mark::X);
-    /// assert_eq!(ai.ai_mark, Mark::X);
-    /// ```
-    pub fn new(ai_mark: Mark) -> SimpleAi {
-        SimpleAi {
-            ai_mark,
-            player_mark: match ai_mark {
-                Mark::O => Mark::X,
-                Mark::X => Mark::O,
-            },
+impl AI {
+    pub fn choose_move_ttt(&mut self, board: &SmallBoard) -> Move {
+        match self {
+            AI::Weak(_) => random_move(board),
+            AI::Medium(ai) => ai.choose_move(board),
+            AI::StrongTTT(ai) => ai.choose_move(board),
+            _ => panic!("Invalid AI."),
         }
     }
 
-    /// Chooses the best move for the AI on the given board.
-    ///
-    /// # Arguments
-    /// * `board` - The current game board state
-    ///
-    /// # Returns
-    /// A tuple (row, col) representing the chosen move
-    ///
-    /// # Panics
-    /// Panics if there are no available moves on the board
-    pub fn choose_move(&self, mut board: SmallBoard) -> (usize, usize) {
-        // find all available moves
-        let available = available_moves(&board);
-        if available.is_empty() {
-            panic!("No available moves found by SimpleAi");
+    pub fn choose_move_utt(&mut self, board: &BigBoard) -> Move {
+        match self {
+            AI::Weak(_) => random_move(board),
+            AI::Medium(ai) => ai.choose_move(board),
+            AI::StrongUTT(ai) => ai.choose_move(board),
+            _ => panic!("Invalid AI."),
         }
+    }
 
-        // check for available wins
-        for &(row, col) in available.iter() {
-            board.make_move(row, col, self.ai_mark);
-            if board.state == GameState::Won(self.ai_mark) {
-                return (row, col);
-            }
-            board.set(row, col, None);
-            board.state = GameState::Playing;
+    pub fn get_mark(&self) -> Mark {
+        match self {
+            AI::Weak(mark) => *mark,
+            AI::Medium(ai) => ai.ai_mark,
+            AI::StrongTTT(ai) => ai.ai_mark,
+            AI::StrongUTT(ai) => ai.ai_mark,
         }
+    }
 
-        // check for possible losses
-        for &(row, col) in available.iter() {
-            board.make_move(row, col, self.player_mark);
-            if board.state == GameState::Won(self.player_mark) {
-                return (row, col);
-            }
-            board.set(row, col, None);
-            board.state = GameState::Playing;
+    pub fn switch_starting_mark(&mut self) {
+        match self {
+            AI::StrongTTT(ai) => ai.switch_starting_mark(),
+            AI::StrongUTT(ai) => ai.switch_starting_mark(),
+            _ => {}
         }
+    }
 
-        // move at random
-        let mut rng = rand::rng();
-        *available.choose(&mut rng).unwrap()
+    pub fn reset(&mut self) {
+        match self {
+            AI::StrongTTT(ai) => ai.reset(),
+            AI::StrongUTT(ai) => ai.reset(),
+            _ => {}
+        }
     }
 }
 
-/// Returns a list of all empty positions on the board.
-///
-/// # Arguments
-/// * `board` - The board to check for available moves
-///
-/// # Returns
-/// A vector of (row, col) tuples representing empty positions
-fn available_moves(board: &SmallBoard) -> Vec<(usize, usize)> {
-    let mut moves: Vec<(usize, usize)> = Vec::new();
-    for row in 0..3 {
-        for col in 0..3 {
-            if board.get(row, col).is_none() {
-                moves.push((row, col));
-            }
-        }
-    }
-    moves
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Move {
+    Base(usize, usize),
+    Ultimate(usize, usize, usize, usize),
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_ai_takes_winning_move() {
-        let mut board = SmallBoard::new();
-        // Set up board where AI (O) can win
-        board.set(0, 0, Some(Mark::O));
-        board.set(0, 1, Some(Mark::O));
-        // Position (0, 2) would be winning move
-
-        let ai = SimpleAi::new(Mark::O);
-        let (row, col) = ai.choose_move(board.clone());
-
-        assert_eq!((row, col), (0, 2));
-    }
-
-    #[test]
-    fn test_ai_blocks_opponent_win() {
-        let mut board = SmallBoard::new();
-        // Set up board where player (X) is about to win
-        board.set(0, 0, Some(Mark::X));
-        board.set(0, 1, Some(Mark::X));
-        // AI must block at (0, 2)
-
-        let ai = SimpleAi::new(Mark::O);
-        let (row, col) = ai.choose_move(board.clone());
-
-        assert_eq!((row, col), (0, 2));
-    }
-
-    #[test]
-    #[should_panic(expected = "No available moves found by SimpleAi")]
-    fn test_ai_panics_on_full_board() {
-        let mut board = SmallBoard::new();
-        // Fill the entire board
-        for row in 0..3 {
-            for col in 0..3 {
-                board.set(row, col, Some(Mark::X));
-            }
+impl Move {
+    pub fn unwrap_base(&self) -> (usize, usize) {
+        match &self {
+            Base(row, col) => (*row, *col),
+            _ => panic!("Expected Base move, got Ultimate."),
         }
-
-        let ai = SimpleAi::new(Mark::O);
-        ai.choose_move(board);
     }
+
+    pub fn unwrap_ultimate(&self) -> (usize, usize, usize, usize) {
+        match &self {
+            Ultimate(board_row, board_col, cell_row, cell_col) => {
+                (*board_row, *board_col, *cell_row, *cell_col)
+            }
+            _ => panic!("Expected Ultimate move, got Base."),
+        }
+    }
+}
+
+pub trait Game {
+    fn play(&mut self, mv: &Move, ai_mark: Mark);
+    fn get_possible_moves(&self) -> Vec<Move>;
+    fn score(&self, mark: Mark) -> i8;
+    fn get_state(&self) -> GameState;
 }

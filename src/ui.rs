@@ -1,7 +1,7 @@
 use crate::app::App;
 use crate::game::base::SmallBoard;
 use crate::game::{Board, GameState, Mark};
-use crate::scenes::{GameMode, GamePlayTTT, GamePlayUTT, Menu, Scene};
+use crate::scenes::{AIMenuStatus, GameMode, GamePlayTTT, GamePlayUTT, Menu, Scene};
 use crate::utils::Position;
 use ratatui::{
     Frame,
@@ -18,6 +18,7 @@ pub fn render(f: &mut Frame, app: &App) {
     match &app.current_scene {
         Scene::MainMenu(menu) => render_menu(f, menu, "Select Game"),
         Scene::TTTMenu(menu) | Scene::UTTMenu(menu) => render_menu(f, menu, "Select Game Mode"),
+        Scene::AIMenu(menu, status) => render_menu(f, menu, ai_menu_title(status)),
         Scene::PlayingTTT(game) => render_game_ttt(f, game),
         Scene::PlayingUTT(game) => render_game_utt(f, game),
     }
@@ -34,7 +35,7 @@ fn render_menu(f: &mut Frame, menu: &Menu, title: &str) {
         .margin(0)
         .constraints([
             Constraint::Max(7),
-            Constraint::Min(9),
+            Constraint::Min(11),
             Constraint::Length(3),
         ])
         .split(f.area());
@@ -42,6 +43,14 @@ fn render_menu(f: &mut Frame, menu: &Menu, title: &str) {
     render_title(f, chunks[0]);
     render_menu_options(f, chunks[1], menu, title);
     render_menu_instructions(f, chunks[2]);
+}
+
+fn ai_menu_title(status: &AIMenuStatus) -> &str {
+    match status {
+        AIMenuStatus::TTTpve | AIMenuStatus::UTTpve => "Select AI",
+        AIMenuStatus::TTTeve(None) | AIMenuStatus::UTTeve(None) => "Select AI for X",
+        AIMenuStatus::TTTeve(Some(_)) | AIMenuStatus::UTTeve(Some(_)) => "Select AI for O",
+    }
 }
 
 /// Renders the ASCII art title banner.
@@ -84,21 +93,25 @@ fn render_title(f: &mut Frame, area: Rect) {
 
 /// Renders the menu options with highlighting for the selected option.
 fn render_menu_options(f: &mut Frame, area: Rect, menu: &Menu, title: &str) {
-    let options_area = center_rect(area, 30, 9);
+    let options_area = center_rect(area, 30, 11);
 
     let mut lines = vec![Line::from("")];
 
     for (i, option) in menu.options.iter().enumerate() {
         let (style, prefix) = if i == menu.selected_option {
-            (Style::default().add_modifier(Modifier::BOLD).fg(Color::LightYellow), "🢒")
+            (
+                Style::default()
+                    .add_modifier(Modifier::BOLD)
+                    .fg(Color::LightYellow),
+                "  🢒 ",
+            )
         } else {
-            (Style::default().add_modifier(Modifier::BOLD), " ")
+            (Style::default().add_modifier(Modifier::BOLD), "    ")
         };
 
-        lines.push(Line::from(vec![Span::styled(
-            format!("{}{}  ", prefix, option),
-            style,
-        )]));
+        lines.push(
+            Line::from(vec![Span::styled(format!("{}{}  ", prefix, option), style)]).left_aligned(),
+        );
         lines.push(Line::from(""));
     }
 
@@ -155,18 +168,20 @@ fn render_ttt_board(f: &mut Frame, area: Rect, game: &GamePlayTTT) {
     // Add current player or game result
     let (status, status_style) = game_status(game.board.state, game.active_player);
 
+    let selection = if matches!(game.mode, GameMode::EvE(_, _)) {
+        None
+    } else {
+        Some((game.selected, game.active_player))
+    };
+
     // Render the board
     for y in 0..5 {
-        lines.push(ttt_board_line(
-            &game.board,
-            y,
-            Some((game.selected, game.active_player)),
-            Style::default(),
-        ));
+        lines.push(ttt_board_line(&game.board, y, selection, Style::default()));
     }
 
     let mode_name = match game.mode {
-        GameMode::PvE => "Mode: Play vs AI",
+        GameMode::PvE(_) => "Mode: Play vs AI",
+        GameMode::EvE(_, _) => "Mode: AI vs AI",
         GameMode::LocalPvP => "Mode: Local PvP",
     };
 
@@ -264,16 +279,33 @@ fn ttt_board_line(
 /// Renders context-appropriate instructions for the game screen.
 fn render_ttt_instructions(f: &mut Frame, area: Rect, game: &GamePlayTTT) {
     let instructions = if game.board.state == GameState::Playing {
-        if game.turn == 0 && game.mode == GameMode::PvE {
-            vec![
-                "S: Play Second | Arrow Keys: Move | Enter: Place Mark".to_string(),
-                "R: Reset Game | M: Main Menu | Q: Quit".to_string(),
-            ]
-        } else {
-            vec![
-                "Arrow Keys: Move | Enter: Place Mark".to_string(),
-                "R: Reset Game | M: Main Menu | Q: Quit".to_string(),
-            ]
+        match game.mode {
+            GameMode::EvE(_, _) => {
+                if game.turn == 0 {
+                    vec![
+                        "S: Let O Move First | Enter: Let Active AI play".to_string(),
+                        "R: Reset Game | M: Main Menu | Q: Quit".to_string(),
+                    ]
+                } else {
+                    vec![
+                        "Enter: Let Active AI play".to_string(),
+                        "R: Reset Game | M: Main Menu | Q: Quit".to_string(),
+                    ]
+                }
+            }
+            _ => {
+                if game.turn != 0 || game.mode == GameMode::LocalPvP {
+                    vec![
+                        "Arrow Keys: Move | Enter: Place Mark".to_string(),
+                        "R: Reset Game | M: Main Menu | Q: Quit".to_string(),
+                    ]
+                } else {
+                    vec![
+                        "S: Play Second | Arrow Keys: Move | Enter: Place Mark".to_string(),
+                        "R: Reset Game | M: Main Menu | Q: Quit".to_string(),
+                    ]
+                }
+            }
         }
     } else {
         vec!["R: Reset Game | M: Main Menu | Q: Quit".to_string()]
@@ -362,26 +394,8 @@ fn render_utt_board(f: &mut Frame, area: Rect, game: &GamePlayUTT) {
                         continue;
                     }
                 };
+                let (selection, board_style) = small_board_selection_style(game, big_row, big_col);
                 let small_board = game.big_board.get_board(big_row, big_col);
-                let (selection, board_style) = if game.selected_board.row == big_row
-                    && game.selected_board.col == big_col
-                    && game.big_board.state == GameState::Playing
-                {
-                    match game.selected_cell {
-                        Some(position) => (
-                            Some((position, game.active_player)),
-                            Style::default().fg(Color::Green),
-                        ),
-                        None => (None, Style::default().fg(Color::LightYellow)),
-                    }
-                } else {
-                    match small_board.state {
-                        GameState::Playing => (None, Style::default()),
-                        GameState::Draw => (None, Style::default().fg(PURPLE)),
-                        GameState::Won(Mark::X) => (None, Style::default().fg(Color::Red)),
-                        GameState::Won(Mark::O) => (None, Style::default().fg(Color::Blue)),
-                    }
-                };
 
                 y_spans
                     .append(&mut ttt_board_line(small_board, small_y, selection, board_style).spans)
@@ -391,7 +405,8 @@ fn render_utt_board(f: &mut Frame, area: Rect, game: &GamePlayUTT) {
     }
 
     let mode_name = match game.mode {
-        GameMode::PvE => "Mode: Play vs AI",
+        GameMode::PvE(_) => "Mode: Play vs AI",
+        GameMode::EvE(_, _) => "Mode: AI vs AI",
         GameMode::LocalPvP => "Mode: Local PvP",
     };
 
@@ -404,25 +419,84 @@ fn render_utt_board(f: &mut Frame, area: Rect, game: &GamePlayUTT) {
     f.render_widget(board, board_area);
 }
 
+fn small_board_selection_style(
+    game: &GamePlayUTT,
+    big_row: usize,
+    big_col: usize,
+) -> (Option<(Position, Mark)>, Style) {
+    let small_board = game.big_board.get_board(big_row, big_col);
+    if matches!(game.mode, GameMode::EvE(_, _)) {
+        match small_board.state {
+            GameState::Draw => (None, Style::default().fg(PURPLE)),
+            GameState::Won(Mark::X) => (None, Style::default().fg(Color::Red)),
+            GameState::Won(Mark::O) => (None, Style::default().fg(Color::Blue)),
+            GameState::Playing => match game.big_board.active_board {
+                Some(selected) if selected == (big_row, big_col) => {
+                    (None, Style::default().fg(Color::Green))
+                }
+                _ => (None, Style::default()),
+            },
+        }
+    } else {
+        if game.selected_board.row == big_row
+            && game.selected_board.col == big_col
+            && game.big_board.state == GameState::Playing
+        {
+            match game.selected_cell {
+                Some(position) => (
+                    Some((position, game.active_player)),
+                    Style::default().fg(Color::Green),
+                ),
+                None => (None, Style::default().fg(Color::LightYellow)),
+            }
+        } else {
+            match small_board.state {
+                GameState::Playing => (None, Style::default()),
+                GameState::Draw => (None, Style::default().fg(PURPLE)),
+                GameState::Won(Mark::X) => (None, Style::default().fg(Color::Red)),
+                GameState::Won(Mark::O) => (None, Style::default().fg(Color::Blue)),
+            }
+        }
+    }
+}
+
 /// Renders instructions for Ultimate Tic-Tac-Toe.
 fn render_utt_instructions(f: &mut Frame, area: Rect, game: &GamePlayUTT) {
     let instructions = if game.big_board.state == GameState::Playing {
-        if game.selected_cell.is_none() {
-            vec![
-                "Arrow Keys: Select Board | Enter: Confirm Board".to_string(),
-                "R: Reset Game | M: Main Menu | Q: Quit".to_string(),
-            ]
-        } else {
-            if game.big_board.active_board.is_none() {
-                vec![
-                    "Arrow Keys: Select Cell | Enter: Place Mark".to_string(),
-                    "Esc: Change Board | R: Reset Game | M: Main Menu | Q: Quit".to_string(),
-                ]
-            } else {
-                vec![
-                    "Arrow Keys: Select Cell | Enter: Place Mark".to_string(),
-                    "R: Reset Game | M: Main Menu | Q: Quit".to_string(),
-                ]
+        match game.mode {
+            GameMode::EvE(_, _) => {
+                if game.turn == 0 {
+                    vec![
+                        "S: Let O Move First | Enter: Let Active AI play".to_string(),
+                        "R: Reset Game | M: Main Menu | Q: Quit".to_string(),
+                    ]
+                } else {
+                    vec![
+                        "Enter: Let Active AI play".to_string(),
+                        "R: Reset Game | M: Main Menu | Q: Quit".to_string(),
+                    ]
+                }
+            }
+            _ => {
+                if game.selected_cell.is_none() {
+                    vec![
+                        "Arrow Keys: Select Board | Enter: Confirm Board".to_string(),
+                        "R: Reset Game | M: Main Menu | Q: Quit".to_string(),
+                    ]
+                } else {
+                    if game.big_board.active_board.is_none() {
+                        vec![
+                            "Arrow Keys: Select Cell | Enter: Place Mark".to_string(),
+                            "Esc: Change Board | R: Reset Game | M: Main Menu | Q: Quit"
+                                .to_string(),
+                        ]
+                    } else {
+                        vec![
+                            "Arrow Keys: Select Cell | Enter: Place Mark".to_string(),
+                            "R: Reset Game | M: Main Menu | Q: Quit".to_string(),
+                        ]
+                    }
+                }
             }
         }
     } else {

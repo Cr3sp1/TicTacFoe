@@ -1,11 +1,12 @@
 use super::*;
+use crate::ai::Move::Base;
+use crate::ai::{Game, Move};
 use std::fmt;
-
 /// A 3x3 tic-tac-toe board.
 ///
 /// The board is represented as a flat array of 9 cells, where each cell
 /// can contain either a mark (X or O) or be empty (None).
-#[derive(Copy, Clone)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SmallBoard {
     cells: [Option<Mark>; 9],
     pub state: GameState,
@@ -51,7 +52,7 @@ impl SmallBoard {
     /// * Panics if the specified position is already occupied
     pub fn make_move(&mut self, row: usize, col: usize, mark: Mark) {
         if self.state != GameState::Playing {
-            panic!("Error: tried making a move on a compeleted board.");
+            panic!("Error: tried making a move on a completed board.");
         }
         if self.get(row, col).is_some() {
             panic!("Error: tried making a move on an occupied position.");
@@ -114,6 +115,39 @@ impl fmt::Display for SmallBoard {
             }
         }
         Ok(())
+    }
+}
+
+impl Game for SmallBoard {
+    fn play(&mut self, mv: &Move, ai_mark: Mark) {
+        let (row, col) = mv.unwrap_base();
+        self.make_move(row, col, ai_mark);
+    }
+
+    fn get_possible_moves(&self) -> Vec<Move> {
+        let mut possible_moves = Vec::new();
+        if self.state != GameState::Playing {
+            return possible_moves;
+        }
+        for row in 0..3 {
+            for col in 0..3 {
+                if self.is_playable(row, col) {
+                    possible_moves.push(Base(row, col));
+                }
+            }
+        }
+        possible_moves
+    }
+
+    fn score(&self, mark: Mark) -> i8 {
+        if let GameState::Won(winning_mark) = self.state {
+            return if mark == winning_mark { 1 } else { -1 };
+        }
+        0
+    }
+
+    fn get_state(&self) -> GameState {
+        self.state
     }
 }
 
@@ -195,7 +229,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "tried making a move on a compeleted board")]
+    #[should_panic(expected = "tried making a move on a completed board")]
     fn test_make_move_on_won_board() {
         let mut board = SmallBoard::new();
 
@@ -211,7 +245,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "tried making a move on a compeleted board")]
+    #[should_panic(expected = "tried making a move on a completed board")]
     fn test_make_move_on_draw_board() {
         let mut board = SmallBoard::new();
 
