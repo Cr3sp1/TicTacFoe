@@ -5,10 +5,13 @@
 A terminal-based Ultimate Tic-Tac-Toe game built with Rust and Ratatui.
 
 ## Features
-- **Choose Mode**: Both base and Ultimate version of tic-tac-toe are avaliable.
+- **Choose Mode**: Both classic and Ultimate version of tic-tac-toe are avaliable.
 - **Local PvP**: Play against another person on the same computer.
-- **Play vs AI**: Challenge a simple AI opponent (only base game so far).
-- **Intuitive TUI**: Clean terminal user interface with keyboard navigation.
+- **Play vs AI**: Challenge an AI opponent.
+- **AI vs AI**: Let two AI opponents fight against each other.
+- **Multiple AI Options**: Choose between AIs with three different levels of strenght.
+- **Monte Carlo Tree Search AI**: The strongest AI option implements the MCTS algorithm, the same used by [AlphaGo](https://en.wikipedia.org/wiki/AlphaGo). 
+- **Intuitive TUI**: Clean terminal user interface with responsive keyboard navigation.
 
 ## Requirements
 Linux, Windows or macOS operating system.
@@ -57,6 +60,7 @@ The compiled binary will be in `target/release/tic-tac-foe`.
 ./tic-tac-foe-macos-aarch64 # macOS (Apple Silicon)
 tic-tac-foe-windows-x86_64.exe  # Windows
 ```
+Or just double-click the executable (only on Windows). 
 
 ### If installed via Cargo:
 
@@ -76,9 +80,12 @@ Or directly run the compiled binary:
 ./target/release/tic-tac-foe
 ```
 
-## To Do
+## AI Options
+We provide three AIs with different levels of strenght to play against or put against each other:
 
-- Implement Monte Carlo tree-search algorithm to provide a strong enemy AI.
+- **Weak**: Just moves randomly.
+- **Medium**: Chooses winning moves if available and tries to avoid losses, but has no foresight.
+- **Strong**: Uses the [MCTS](https://en.wikipedia.org/wiki/Monte_Carlo_tree_search) algorithm to choose moves that improve the chances of winning in the long run. 
 
 ## Dependencies
 
