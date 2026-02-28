@@ -17,9 +17,9 @@ A terminal-based Ultimate Tic-Tac-Toe game built with Rust and Ratatui.
 Linux, Windows or macOS operating system.
 Installing via Cargo or from source additionally requires Rust 1.70 or higher and Cargo already installed.
 
-## Installation
+## Installation and Usage
 
-### Download Pre-built Binary (Recommended)
+### Pre-built Binary (Recommended)
 
 Download the appropriate binary for your platform from the [latest release](https://github.com/Cr3sp1/TicTacFoe/releases/latest):
 
@@ -33,11 +33,22 @@ After downloading, you may need to make the binary executable (Linux/macOS only)
 ```bash
 chmod +x tic-tac-foe-linux-x86_64  # or the macOS variant
 ```
-
+Then run with:
+```bash
+./tic-tac-foe-linux-x86_64  # Linux
+./tic-tac-foe-macos-x86_64  # macOS (Intel)
+./tic-tac-foe-macos-aarch64 # macOS (Apple Silicon)
+tic-tac-foe-windows-x86_64.exe  # Windows
+```
+Or just double-click the executable (only on Windows).
 ### Via Cargo
 
 ```bash
 cargo install tic-tac-foe
+```
+Then run with:
+```bash
+tic-tac-foe
 ```
 
 ### From Source
@@ -47,29 +58,7 @@ git clone https://github.com/Cr3sp1/tic-tac-foe.git
 cd tic-tac-foe
 cargo build --release
 ```
-
-The compiled binary will be in `target/release/tic-tac-foe`.
-
-## Usage
-
-### If you downloaded the pre-built binary:
-
-```bash
-./tic-tac-foe-linux-x86_64  # Linux
-./tic-tac-foe-macos-x86_64  # macOS (Intel)
-./tic-tac-foe-macos-aarch64 # macOS (Apple Silicon)
-tic-tac-foe-windows-x86_64.exe  # Windows
-```
-Or just double-click the executable (only on Windows). 
-
-### If installed via Cargo:
-
-```bash
-tic-tac-foe
-```
-
-### If built from source:
-
+Then run with:
 ```bash
 cargo run
 ```
