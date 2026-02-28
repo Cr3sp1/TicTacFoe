@@ -1,5 +1,11 @@
 # Changelog
 
+### Added
+- Strong AI that implements the Monte Carlo Tree Search algorithm [#3](https://github.com/Cr3sp1/TicTacFoe/pull/3).
+- AI vs AI mode [#3](https://github.com/Cr3sp1/TicTacFoe/pull/3).
+- Different AI options (simple, random) [#3](https://github.com/Cr3sp1/TicTacFoe/pull/3).
+- AI for Ultimate tic-tac-toe [#3](https://github.com/Cr3sp1/TicTacFoe/pull/3).
+
 ## [0.2.0] - 2026/01/06
 
 ### Added
