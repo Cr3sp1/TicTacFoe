@@ -29,10 +29,7 @@ impl SimpleAi {
     pub fn new(ai_mark: Mark) -> SimpleAi {
         SimpleAi {
             ai_mark,
-            enemy_mark: match ai_mark {
-                Mark::O => Mark::X,
-                Mark::X => Mark::O,
-            },
+            enemy_mark: ai_mark.switch(),
         }
     }
 
@@ -46,7 +43,7 @@ impl SimpleAi {
     ///
     /// # Panics
     /// Panics if there are no available moves on the board
-    pub fn choose_move<T>(&self, board: T) -> Move
+    pub fn choose_move<T>(&self, board: &T) -> Move
     where
         T: Game + Clone,
     {
@@ -107,7 +104,7 @@ mod tests {
         // Position (0, 2) would be winning move
 
         let ai = SimpleAi::new(Mark::O);
-        let (row, col) = ai.choose_move(board.clone()).unwrap_base();
+        let (row, col) = ai.choose_move(&board).unwrap_base();
 
         assert_eq!((row, col), (0, 2));
     }
@@ -121,7 +118,7 @@ mod tests {
         // AI must block at (0, 2)
 
         let ai = SimpleAi::new(Mark::O);
-        let (row, col) = ai.choose_move(board.clone()).unwrap_base();
+        let (row, col) = ai.choose_move(&board).unwrap_base();
 
         assert_eq!((row, col), (0, 2));
     }
@@ -138,6 +135,6 @@ mod tests {
         }
 
         let ai = SimpleAi::new(Mark::O);
-        ai.choose_move(board);
+        ai.choose_move(&board);
     }
 }

@@ -10,7 +10,7 @@ use crate::utils::{
 pub const MAIN_MENU_OPTIONS: [&'static str; 3] = ["Ultimate Tic Tac Toe", "Tic Tac Toe", "Quit"];
 pub const TTT_MENU_OPTIONS: [&'static str; 4] = ["Play vs AI", "AI vs AI", "Local PvP", "Back"];
 pub const UTT_MENU_OPTIONS: [&'static str; 4] = ["Play vs AI", "AI vs AI", "Local PvP", "Back"];
-pub const AI_MENU_OPTIONS: [&'static str; 3] = ["Weak", "Medium", "Back"];
+pub const AI_MENU_OPTIONS: [&'static str; 4] = ["Weak", "Medium", "Strong", "Back"];
 
 /// Represents all the possible scenes.
 pub enum Scene {
@@ -134,10 +134,7 @@ impl GamePlayTTT {
                     .make_move(self.selected.row, self.selected.col, self.active_player);
                 self.turn += 1;
 
-                self.active_player = match self.active_player {
-                    Mark::X => Mark::O,
-                    Mark::O => Mark::X,
-                };
+                self.active_player = self.active_player.switch();
 
                 if self.board.state != GameState::Playing {
                     return;
@@ -155,29 +152,23 @@ impl GamePlayTTT {
         match &mut self.mode {
             GameMode::LocalPvP => return,
             GameMode::PvE(ai) => {
-                let (ai_row, ai_col) = ai.choose_move(self.board).unwrap_base();
+                let (ai_row, ai_col) = ai.choose_move_ttt(&self.board).unwrap_base();
                 self.board.make_move(ai_row, ai_col, ai.get_mark());
 
                 self.turn += 1;
-                self.active_player = match self.active_player {
-                    Mark::X => Mark::O,
-                    Mark::O => Mark::X,
-                };
+                self.active_player = self.active_player.switch();
 
                 reset_position(&self.board, &mut self.selected);
             }
             GameMode::EvE(ai_x, ai_o) => {
                 let (ai_row, ai_col) = match self.active_player {
-                    Mark::X => ai_x.choose_move(self.board).unwrap_base(),
-                    Mark::O => ai_o.choose_move(self.board).unwrap_base(),
+                    Mark::X => ai_x.choose_move_ttt(&self.board).unwrap_base(),
+                    Mark::O => ai_o.choose_move_ttt(&self.board).unwrap_base(),
                 };
                 self.board.make_move(ai_row, ai_col, self.active_player);
 
                 self.turn += 1;
-                self.active_player = match self.active_player {
-                    Mark::X => Mark::O,
-                    Mark::O => Mark::X,
-                }
+                self.active_player = self.active_player.switch()
             }
         }
     }
@@ -186,6 +177,14 @@ impl GamePlayTTT {
     pub fn play_second(&mut self) {
         if self.board.state == GameState::Playing && self.turn == 0 {
             self.active_player = Mark::O;
+            match &mut self.mode {
+                GameMode::LocalPvP => return,
+                GameMode::PvE(ai) => ai.switch_starting_mark(),
+                GameMode::EvE(ai_x, ai_o) => {
+                    ai_x.switch_starting_mark();
+                    ai_o.switch_starting_mark();
+                }
+            }
             self.ai_play();
         }
     }
@@ -197,6 +196,14 @@ impl GamePlayTTT {
         self.turn = 0;
         self.selected.row = 0;
         self.selected.col = 0;
+        match &mut self.mode {
+            GameMode::LocalPvP => return,
+            GameMode::PvE(ai) => ai.reset(),
+            GameMode::EvE(ai_x, ai_o) => {
+                ai_x.reset();
+                ai_o.reset();
+            }
+        }
     }
 }
 
@@ -310,10 +317,7 @@ impl GamePlayUTT {
 
                 self.turn += 1;
 
-                self.active_player = match self.active_player {
-                    Mark::X => Mark::O,
-                    Mark::O => Mark::X,
-                };
+                self.active_player = self.active_player.switch();
 
                 if self.big_board.state != GameState::Playing {
                     return;
@@ -351,6 +355,14 @@ impl GamePlayUTT {
         self.turn = 0;
         self.selected_board = Position { row: 0, col: 0 };
         self.selected_cell = None;
+        match &mut self.mode {
+            GameMode::LocalPvP => return,
+            GameMode::PvE(ai) => ai.reset(),
+            GameMode::EvE(ai_x, ai_o) => {
+                ai_x.reset();
+                ai_o.reset();
+            }
+        }
     }
 
     /// Executes the AI's turn in PvE and EvE modes.
@@ -358,29 +370,23 @@ impl GamePlayUTT {
         match &mut self.mode {
             GameMode::LocalPvP => return,
             GameMode::PvE(ai) => {
-                let mv = ai.choose_move(self.big_board);
+                let mv = ai.choose_move_utt(&self.big_board);
                 self.big_board.play(&mv, ai.get_mark());
 
                 self.turn += 1;
-                self.active_player = match self.active_player {
-                    Mark::X => Mark::O,
-                    Mark::O => Mark::X,
-                };
+                self.active_player = self.active_player.switch();
 
                 self.reset_selection();
             }
             GameMode::EvE(ai_x, ai_o) => {
                 let mv = match self.active_player {
-                    Mark::X => ai_x.choose_move(self.big_board),
-                    Mark::O => ai_o.choose_move(self.big_board),
+                    Mark::X => ai_x.choose_move_utt(&self.big_board),
+                    Mark::O => ai_o.choose_move_utt(&self.big_board),
                 };
                 self.big_board.play(&mv, self.active_player);
 
                 self.turn += 1;
-                self.active_player = match self.active_player {
-                    Mark::X => Mark::O,
-                    Mark::O => Mark::X,
-                }
+                self.active_player = self.active_player.switch();
             }
         }
     }
@@ -389,6 +395,14 @@ impl GamePlayUTT {
     pub fn play_second(&mut self) {
         if self.big_board.state == GameState::Playing && self.turn == 0 {
             self.active_player = Mark::O;
+            match &mut self.mode {
+                GameMode::LocalPvP => return,
+                GameMode::PvE(ai) => ai.switch_starting_mark(),
+                GameMode::EvE(ai_x, ai_o) => {
+                    ai_x.switch_starting_mark();
+                    ai_o.switch_starting_mark();
+                }
+            }
             self.ai_play();
         }
     }

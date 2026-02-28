@@ -52,7 +52,7 @@ impl SmallBoard {
     /// * Panics if the specified position is already occupied
     pub fn make_move(&mut self, row: usize, col: usize, mark: Mark) {
         if self.state != GameState::Playing {
-            panic!("Error: tried making a move on a compeleted board.");
+            panic!("Error: tried making a move on a completed board.");
         }
         if self.get(row, col).is_some() {
             panic!("Error: tried making a move on an occupied position.");
@@ -229,7 +229,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "tried making a move on a compeleted board")]
+    #[should_panic(expected = "tried making a move on a completed board")]
     fn test_make_move_on_won_board() {
         let mut board = SmallBoard::new();
 
@@ -245,7 +245,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "tried making a move on a compeleted board")]
+    #[should_panic(expected = "tried making a move on a completed board")]
     fn test_make_move_on_draw_board() {
         let mut board = SmallBoard::new();
 

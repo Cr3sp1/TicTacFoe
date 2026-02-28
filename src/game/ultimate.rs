@@ -104,7 +104,7 @@ impl BigBoard {
         mark: Mark,
     ) {
         if self.state != GameState::Playing {
-            panic!("Error: tried making a move on a compeleted big board.");
+            panic!("Error: tried making a move on a completed big board.");
         }
         if let Some(active_board) = self.active_board {
             if (board_row, board_col) != active_board {
@@ -173,6 +173,9 @@ impl Game for BigBoard {
 
     fn get_possible_moves(&self) -> Vec<Move> {
         let mut possible_moves = Vec::new();
+        if self.state != GameState::Playing {
+            return possible_moves;
+        }
         for board_row in 0..3 {
             for board_col in 0..3 {
                 // if there is an active board skip inactive boards
@@ -320,5 +323,16 @@ mod tests {
 
         board.make_move(0, 0, 0, 0, Mark::X);
         board.make_move(0, 0, 0, 0, Mark::O); // Should panic
+    }
+
+    #[test]
+    fn test_get_possible_moves_empty_when_terminal() {
+        let mut board = BigBoard::new();
+
+        // Force a terminal state
+        board.state = GameState::Draw;
+
+        let moves = board.get_possible_moves();
+        assert!(moves.is_empty());
     }
 }

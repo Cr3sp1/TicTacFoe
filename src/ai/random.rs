@@ -12,7 +12,7 @@ use rand::prelude::*;
 ///
 /// # Panics
 /// Panics if there are no available moves on the board
-pub fn random_move<T>(board: T) -> Move
+pub fn random_move<T>(board: &T) -> Move
 where
     T: Game,
 {

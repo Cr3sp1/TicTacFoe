@@ -1,8 +1,11 @@
 use crate::ai::AI;
-use crate::ai::AI::{Medium, Weak};
+use crate::ai::AI::{Medium, StrongTTT, StrongUTT, Weak};
+use crate::ai::mcts::MCTSAi;
 use crate::ai::simple::SimpleAi;
 use crate::game::Mark;
 use crate::game::Mark::{O, X};
+use crate::game::base::SmallBoard;
+use crate::game::ultimate::BigBoard;
 use crate::scenes::{
     AI_MENU_OPTIONS, AIMenuStatus, GameMode, GamePlayTTT, GamePlayUTT, MAIN_MENU_OPTIONS, Menu,
     Scene, TTT_MENU_OPTIONS, UTT_MENU_OPTIONS,
@@ -151,6 +154,14 @@ impl App {
                 let new_ai = match selected_option {
                     "Weak" => |mark: Mark| -> AI { Weak(mark) },
                     "Medium" => |mark: Mark| -> AI { Medium(SimpleAi::new(mark)) },
+                    "Strong" => match &status {
+                        AIMenuStatus::TTTpve | AIMenuStatus::TTTeve(_) => {
+                            |mark| -> AI { StrongTTT(MCTSAi::new(SmallBoard::new(), mark)) }
+                        }
+                        AIMenuStatus::UTTpve | AIMenuStatus::UTTeve(_) => {
+                            |mark| -> AI { StrongUTT(MCTSAi::new(BigBoard::new(), mark)) }
+                        }
+                    },
                     _ => panic!("Option selected in AI Menu does not exist."),
                 };
                 match status {
