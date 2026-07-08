@@ -1,7 +1,10 @@
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::Terminal;
+use std::time::Duration;
 use tic_tac_foe::app::App;
 use tic_tac_foe::ui;
+
+const TICK_RATE: Duration = Duration::from_millis(50);
 
 /// Entry point for the Tic-Tac-Toe TUI application.
 ///
@@ -44,40 +47,42 @@ where
     loop {
         terminal.draw(|f| ui::render(f, app))?;
 
-        if let Event::Key(key) = event::read()? {
-            if key.kind == KeyEventKind::Press {
-                match key.code {
-                    KeyCode::Char('q') | KeyCode::Char('Q') => {
-                        app.quit();
+        if event::poll(TICK_RATE)? {
+            if let Event::Key(key) = event::read()? {
+                if key.kind == KeyEventKind::Press {
+                    match key.code {
+                        KeyCode::Char('q') | KeyCode::Char('Q') => {
+                            app.quit();
+                        }
+                        KeyCode::Char('r') | KeyCode::Char('R') => {
+                            app.handle_reset();
+                        }
+                        KeyCode::Char('m') | KeyCode::Char('M') => {
+                            app.handle_main_menu();
+                        }
+                        KeyCode::Char('s') | KeyCode::Char('S') => {
+                            app.handle_second();
+                        }
+                        KeyCode::Left | KeyCode::Char('h') => {
+                            app.handle_left();
+                        }
+                        KeyCode::Right | KeyCode::Char('l') => {
+                            app.handle_right();
+                        }
+                        KeyCode::Up | KeyCode::Char('k') => {
+                            app.handle_up();
+                        }
+                        KeyCode::Down | KeyCode::Char('j') => {
+                            app.handle_down();
+                        }
+                        KeyCode::Enter | KeyCode::Char(' ') => {
+                            app.handle_enter();
+                        }
+                        KeyCode::Esc => {
+                            app.handle_esc();
+                        }
+                        _ => {}
                     }
-                    KeyCode::Char('r') | KeyCode::Char('R') => {
-                        app.handle_reset();
-                    }
-                    KeyCode::Char('m') | KeyCode::Char('M') => {
-                        app.handle_main_menu();
-                    }
-                    KeyCode::Char('s') | KeyCode::Char('S') => {
-                        app.handle_second();
-                    }
-                    KeyCode::Left | KeyCode::Char('h') => {
-                        app.handle_left();
-                    }
-                    KeyCode::Right | KeyCode::Char('l') => {
-                        app.handle_right();
-                    }
-                    KeyCode::Up | KeyCode::Char('k') => {
-                        app.handle_up();
-                    }
-                    KeyCode::Down | KeyCode::Char('j') => {
-                        app.handle_down();
-                    }
-                    KeyCode::Enter | KeyCode::Char(' ') => {
-                        app.handle_enter();
-                    }
-                    KeyCode::Esc => {
-                        app.handle_esc();
-                    }
-                    _ => {}
                 }
             }
         }
