@@ -1,6 +1,7 @@
 use crate::app::App;
 use crate::game::base::SmallBoard;
 use crate::game::{Board, GameState, Mark};
+use crate::network::NetworkStatus;
 use crate::scenes::{AIMenuStatus, GameMode, GamePlayTTT, GamePlayUTT, Menu, Scene};
 use crate::utils::Position;
 use ratatui::{
@@ -8,7 +9,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Paragraph},
+    widgets::{Block, BorderType, Borders, Paragraph, Wrap},
 };
 
 const PURPLE: Color = Color::Indexed(93);
@@ -19,6 +20,7 @@ pub fn render(f: &mut Frame, app: &App) {
         Scene::MainMenu(menu) => render_menu(f, menu, "Select Game"),
         Scene::TTTMenu(menu) | Scene::UTTMenu(menu) => render_menu(f, menu, "Select Game Mode"),
         Scene::OnlineTTTMenu(menu) => render_menu(f, menu, "Online Tic Tac Toe"),
+        Scene::HostingOnlineTTT => render_hosting_ttt(f, &app.network_status),
         Scene::AIMenu(menu, status) => render_menu(f, menu, ai_menu_title(status)),
         Scene::PlayingTTT(game) => render_game_ttt(f, game),
         Scene::PlayingUTT(game) => render_game_utt(f, game),
@@ -44,6 +46,111 @@ fn render_menu(f: &mut Frame, menu: &Menu, title: &str) {
     render_title(f, chunks[0]);
     render_menu_options(f, chunks[1], menu, title);
     render_menu_instructions(f, chunks[2]);
+}
+
+fn render_hosting_ttt(f: &mut Frame, status: &NetworkStatus) {
+    if render_size_warning(f, 33, 12) {
+        return;
+    }
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Max(7),
+            Constraint::Min(13),
+            Constraint::Length(3),
+        ])
+        .split(f.area());
+    render_title(f, chunks[0]);
+
+    let width = chunks[1].width.saturating_sub(4).min(90);
+    let area = center_rect(chunks[1], width, 13);
+    let content = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Length(2),
+            Constraint::Min(1),
+        ])
+        .split(area);
+
+    let (message, style) = match status {
+        NetworkStatus::Idle => ("Starting network...", Style::default().fg(Color::Yellow)),
+        NetworkStatus::Hosting { .. } => (
+            "Waiting for opponent",
+            Style::default()
+                .fg(Color::LightYellow)
+                .add_modifier(Modifier::BOLD),
+        ),
+        NetworkStatus::Connecting => ("Connecting...", Style::default().fg(Color::Yellow)),
+        NetworkStatus::Connected => (
+            "Opponent connected",
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        ),
+        NetworkStatus::Failed(_) => (
+            "Unable to host match",
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        ),
+    };
+    let header = Paragraph::new(message)
+        .style(style)
+        .alignment(Alignment::Center)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .title("Host Online Match"),
+        );
+    f.render_widget(header, content[0]);
+
+    match status {
+        NetworkStatus::Hosting { ticket } => {
+            f.render_widget(
+                Paragraph::new("Copy and share this ticket:")
+                    .alignment(Alignment::Center)
+                    .style(
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                content[1],
+            );
+            let ticket = format_ticket_lines(ticket)
+                .into_iter()
+                .map(|line| Line::from(Span::styled(line, Style::default().fg(Color::LightYellow))))
+                .collect::<Vec<_>>();
+            f.render_widget(
+                Paragraph::new(ticket).alignment(Alignment::Center),
+                content[2],
+            );
+        }
+        NetworkStatus::Failed(error) => {
+            f.render_widget(
+                Paragraph::new(error.clone())
+                    .alignment(Alignment::Center)
+                    .wrap(Wrap { trim: false }),
+                content[2],
+            );
+        }
+        _ => {}
+    }
+
+    render_instructions(f, chunks[2], &["Esc: Cancel | Q: Quit".to_string()]);
+}
+
+fn format_ticket_lines(ticket: &str) -> Vec<String> {
+    let characters = ticket.chars().collect::<Vec<_>>();
+    let groups = characters
+        .chunks(4)
+        .map(|chunk| chunk.iter().collect::<String>())
+        .collect::<Vec<_>>();
+
+    groups
+        .chunks(6)
+        .map(|line| line.join(" "))
+        .collect::<Vec<_>>()
 }
 
 fn ai_menu_title(status: &AIMenuStatus) -> &str {
@@ -591,4 +698,19 @@ fn render_size_warning(f: &mut Frame, min_width: u16, min_height: u16) -> bool {
 
     f.render_widget(warning, size);
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_format_ticket_lines_groups_ticket_for_copying() {
+        let lines = format_ticket_lines("abcdefghijklmnopqrstuvwxy");
+
+        assert_eq!(
+            lines,
+            vec!["abcd efgh ijkl mnop qrst uvwx".to_string(), "y".to_string(),]
+        );
+    }
 }

@@ -19,6 +19,7 @@ pub enum Scene {
     MainMenu(Menu),
     TTTMenu(Menu),
     OnlineTTTMenu(Menu),
+    HostingOnlineTTT,
     UTTMenu(Menu),
     AIMenu(Menu, AIMenuStatus),
     PlayingTTT(GamePlayTTT),

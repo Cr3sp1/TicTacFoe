@@ -138,6 +138,15 @@ impl App {
         self.current_scene = Scene::OnlineTTTMenu(Menu::new(ONLINE_TTT_MENU_OPTIONS.to_vec()));
     }
 
+    /// Starts hosting a classic online match.
+    pub fn start_hosting_online_ttt(&mut self) {
+        self.current_scene = Scene::HostingOnlineTTT;
+        self.network_status = NetworkStatus::Idle;
+        if let Err(error) = self.host_online_match() {
+            self.network_status = NetworkStatus::Failed(error.to_string());
+        }
+    }
+
     /// Goes to the ultimate tic-tac-toe menu.
     pub fn go_to_utt_menu(&mut self) {
         self.current_scene = Scene::UTTMenu(Menu::new(UTT_MENU_OPTIONS.to_vec()));
@@ -176,6 +185,7 @@ impl App {
             | Scene::OnlineTTTMenu(menu)
             | Scene::UTTMenu(menu)
             | Scene::AIMenu(menu, _) => menu.move_up(),
+            Scene::HostingOnlineTTT => {}
             Scene::PlayingTTT(game) => game.input_up(),
             Scene::PlayingUTT(game) => game.input_up(),
         }
@@ -191,6 +201,7 @@ impl App {
             | Scene::OnlineTTTMenu(menu)
             | Scene::UTTMenu(menu)
             | Scene::AIMenu(menu, _) => menu.move_down(),
+            Scene::HostingOnlineTTT => {}
             Scene::PlayingTTT(game) => game.input_down(),
             Scene::PlayingUTT(game) => game.input_down(),
         }
@@ -223,7 +234,8 @@ impl App {
                 _ => panic!("Option selected in Ultimate Tic Tac Toe Menu does not exist."),
             },
             Scene::OnlineTTTMenu(menu) => match menu.get_selected() {
-                "Host Match" | "Join Match" => {}
+                "Host Match" => self.start_hosting_online_ttt(),
+                "Join Match" => {}
                 "Back" => self.go_to_ttt_menu(),
                 _ => panic!("Option selected in Online Tic Tac Toe Menu does not exist."),
             },
@@ -276,6 +288,7 @@ impl App {
                     }
                 }
             }
+            Scene::HostingOnlineTTT => {}
             Scene::PlayingTTT(game) => game.play_move(),
             Scene::PlayingUTT(game) => game.input_enter(),
         }
@@ -289,6 +302,10 @@ impl App {
             Scene::MainMenu(_) => self.quit(),
             Scene::TTTMenu(_) => self.go_to_main_menu(),
             Scene::OnlineTTTMenu(_) => self.go_to_ttt_menu(),
+            Scene::HostingOnlineTTT => {
+                self.stop_network();
+                self.go_to_online_ttt_menu();
+            }
             Scene::UTTMenu(_) => self.go_to_main_menu(),
             Scene::AIMenu(_, status) => match status {
                 AIMenuStatus::TTTpve => self.go_to_ttt_menu(),
@@ -395,6 +412,22 @@ mod tests {
 
         app.handle_esc();
         assert!(matches!(app.current_scene, Scene::TTTMenu(_)));
+    }
+
+    #[test]
+    fn test_host_match_starts_and_cancels_network() {
+        let mut app = App::new();
+        app.go_to_online_ttt_menu();
+
+        app.handle_enter();
+
+        assert!(matches!(app.current_scene, Scene::HostingOnlineTTT));
+        assert!(app.network_is_active());
+
+        app.handle_esc();
+        assert!(matches!(app.current_scene, Scene::OnlineTTTMenu(_)));
+        assert!(!app.network_is_active());
+        assert_eq!(app.network_status, NetworkStatus::Idle);
     }
 
     #[test]

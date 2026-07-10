@@ -53,7 +53,11 @@ pub fn encode_ticket(addr: EndpointAddr) -> String {
 }
 
 pub fn decode_ticket(ticket: &str) -> Result<EndpointAddr, ParseError> {
-    let ticket = ticket.trim().parse::<EndpointTicket>()?;
+    let ticket = ticket
+        .chars()
+        .filter(|character| !character.is_whitespace())
+        .collect::<String>()
+        .parse::<EndpointTicket>()?;
     Ok(ticket.into())
 }
 
@@ -298,10 +302,12 @@ mod tests {
     }
 
     #[test]
-    fn test_decode_ticket_trims_input() {
+    fn test_decode_ticket_ignores_whitespace() {
         let key = iroh::SecretKey::generate();
         let addr = EndpointAddr::new(key.public());
-        let ticket = format!("  {}\n", encode_ticket(addr.clone()));
+        let ticket = encode_ticket(addr.clone());
+        let midpoint = ticket.len() / 2;
+        let ticket = format!("  {}\n  {}\t", &ticket[..midpoint], &ticket[midpoint..]);
 
         let decoded = decode_ticket(&ticket).unwrap();
 
