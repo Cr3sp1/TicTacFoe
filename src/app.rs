@@ -6,6 +6,7 @@ use crate::game::Mark;
 use crate::game::Mark::{O, X};
 use crate::game::base::SmallBoard;
 use crate::game::ultimate::BigBoard;
+use crate::network::{NetworkClient, NetworkStatus};
 use crate::scenes::{
     AI_MENU_OPTIONS, AIMenuStatus, GameMode, GamePlayTTT, GamePlayUTT, MAIN_MENU_OPTIONS, Menu,
     Scene, TTT_MENU_OPTIONS, UTT_MENU_OPTIONS,
@@ -17,7 +18,9 @@ use crate::scenes::{
 /// appropriate screen handlers.
 pub struct App {
     pub current_scene: Scene,
+    pub network_status: NetworkStatus,
     pub should_quit: bool,
+    network_client: Option<NetworkClient>,
 }
 
 impl App {
@@ -29,7 +32,41 @@ impl App {
                 "Tic Tac Toe",
                 "Quit",
             ])),
+            network_status: NetworkStatus::Idle,
             should_quit: false,
+            network_client: None,
+        }
+    }
+
+    /// Starts the network worker if it is not already running.
+    pub fn start_network(&mut self) -> std::io::Result<()> {
+        if self.network_client.is_none() {
+            self.network_client = Some(NetworkClient::start()?);
+        }
+        Ok(())
+    }
+
+    /// Stops the network worker and resets its visible status.
+    pub fn stop_network(&mut self) {
+        self.network_client = None;
+        self.network_status = NetworkStatus::Idle;
+    }
+
+    /// Returns whether the network worker is currently running.
+    pub fn network_is_active(&self) -> bool {
+        self.network_client.is_some()
+    }
+
+    /// Applies all network events currently waiting for the synchronous app loop.
+    pub fn poll_network_events(&mut self) {
+        loop {
+            let Some(client) = &self.network_client else {
+                return;
+            };
+            let Ok(event) = client.try_recv() else {
+                return;
+            };
+            self.network_status = event.into();
         }
     }
 
@@ -251,6 +288,20 @@ mod tests {
         let app = App::new();
         assert!(matches!(app.current_scene, Scene::MainMenu(_)));
         assert!(!app.should_quit);
+        assert_eq!(app.network_status, NetworkStatus::Idle);
+        assert!(!app.network_is_active());
+    }
+
+    #[test]
+    fn test_network_starts_and_stops_lazily() {
+        let mut app = App::new();
+
+        app.start_network().unwrap();
+        assert!(app.network_is_active());
+
+        app.stop_network();
+        assert!(!app.network_is_active());
+        assert_eq!(app.network_status, NetworkStatus::Idle);
     }
 
     #[test]

@@ -45,6 +45,7 @@ where
     B::Error: 'static,
 {
     loop {
+        app.poll_network_events();
         terminal.draw(|f| ui::render(f, app))?;
 
         if event::poll(TICK_RATE)? {

@@ -24,6 +24,30 @@ pub enum NetworkEvent {
     Failed(String),
 }
 
+#[derive(Clone, Debug, Default, PartialEq)]
+pub enum NetworkStatus {
+    #[default]
+    Idle,
+    Hosting {
+        ticket: String,
+    },
+    Connecting,
+    Connected,
+    Failed(String),
+}
+
+impl From<NetworkEvent> for NetworkStatus {
+    fn from(event: NetworkEvent) -> Self {
+        match event {
+            NetworkEvent::Hosting { ticket } => Self::Hosting { ticket },
+            NetworkEvent::Connecting => Self::Connecting,
+            NetworkEvent::Connected => Self::Connected,
+            NetworkEvent::Disconnected => Self::Idle,
+            NetworkEvent::Failed(error) => Self::Failed(error),
+        }
+    }
+}
+
 pub fn encode_ticket(addr: EndpointAddr) -> String {
     EndpointTicket::new(addr).to_string()
 }
