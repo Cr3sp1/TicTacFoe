@@ -8,14 +8,17 @@ use crate::utils::{
 };
 
 pub const MAIN_MENU_OPTIONS: [&'static str; 3] = ["Ultimate Tic Tac Toe", "Tic Tac Toe", "Quit"];
-pub const TTT_MENU_OPTIONS: [&'static str; 4] = ["Play vs AI", "AI vs AI", "Local PvP", "Back"];
+pub const TTT_MENU_OPTIONS: [&'static str; 5] =
+    ["Play vs AI", "AI vs AI", "Local PvP", "Online PvP", "Back"];
 pub const UTT_MENU_OPTIONS: [&'static str; 4] = ["Play vs AI", "AI vs AI", "Local PvP", "Back"];
 pub const AI_MENU_OPTIONS: [&'static str; 4] = ["Weak", "Medium", "Strong", "Back"];
+pub const ONLINE_TTT_MENU_OPTIONS: [&'static str; 3] = ["Host Match", "Join Match", "Back"];
 
 /// Represents all the possible scenes.
 pub enum Scene {
     MainMenu(Menu),
     TTTMenu(Menu),
+    OnlineTTTMenu(Menu),
     UTTMenu(Menu),
     AIMenu(Menu, AIMenuStatus),
     PlayingTTT(GamePlayTTT),
@@ -417,7 +420,7 @@ mod tests {
     fn test_main_menu_new() {
         let menu = Menu::new(TTT_MENU_OPTIONS.to_vec());
         assert_eq!(menu.selected_option, 0);
-        assert_eq!(menu.options.len(), 4);
+        assert_eq!(menu.options.len(), TTT_MENU_OPTIONS.len());
         assert_eq!(menu.get_selected(), "Play vs AI");
     }
 
@@ -440,7 +443,7 @@ mod tests {
     #[test]
     fn test_menu_move_down_wraps() {
         let mut menu = Menu::new(TTT_MENU_OPTIONS.to_vec());
-        menu.selected_option = 3;
+        menu.selected_option = menu.options.len() - 1;
         menu.move_down();
         assert_eq!(menu.selected_option, 0);
     }

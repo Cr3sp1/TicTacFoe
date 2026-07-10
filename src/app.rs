@@ -6,10 +6,10 @@ use crate::game::Mark;
 use crate::game::Mark::{O, X};
 use crate::game::base::SmallBoard;
 use crate::game::ultimate::BigBoard;
-use crate::network::{NetworkClient, NetworkStatus};
+use crate::network::{NetworkClient, NetworkCommand, NetworkStatus};
 use crate::scenes::{
     AI_MENU_OPTIONS, AIMenuStatus, GameMode, GamePlayTTT, GamePlayUTT, MAIN_MENU_OPTIONS, Menu,
-    Scene, TTT_MENU_OPTIONS, UTT_MENU_OPTIONS,
+    ONLINE_TTT_MENU_OPTIONS, Scene, TTT_MENU_OPTIONS, UTT_MENU_OPTIONS,
 };
 
 /// Main application state manager.
@@ -57,6 +57,24 @@ impl App {
         self.network_client.is_some()
     }
 
+    /// Starts hosting an online match.
+    pub fn host_online_match(&mut self) -> std::io::Result<()> {
+        self.send_network_command(NetworkCommand::Host)
+    }
+
+    /// Attempts to join an online match using an iroh ticket.
+    pub fn join_online_match(&mut self, ticket: String) -> std::io::Result<()> {
+        self.send_network_command(NetworkCommand::Join(ticket))
+    }
+
+    /// Disconnects the current online match without stopping the worker.
+    pub fn disconnect_online_match(&mut self) -> std::io::Result<()> {
+        if self.network_client.is_none() {
+            return Ok(());
+        }
+        self.send_active_network_command(NetworkCommand::Disconnect)
+    }
+
     /// Applies all network events currently waiting for the synchronous app loop.
     pub fn poll_network_events(&mut self) {
         loop {
@@ -68,6 +86,31 @@ impl App {
             };
             self.network_status = event.into();
         }
+    }
+
+    fn send_network_command(&mut self, command: NetworkCommand) -> std::io::Result<()> {
+        self.start_network()?;
+        self.send_active_network_command(command)
+    }
+
+    fn send_active_network_command(&mut self, command: NetworkCommand) -> std::io::Result<()> {
+        let Some(client) = self.network_client.as_ref() else {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::NotConnected,
+                "network worker is not running",
+            ));
+        };
+        let result = client.send(command);
+
+        if result.is_err() {
+            self.stop_network();
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::BrokenPipe,
+                "network worker stopped",
+            ));
+        }
+
+        Ok(())
     }
 
     /// Starts a new tic-tac-toe game with the specified mode.
@@ -88,6 +131,11 @@ impl App {
     /// Goes to the tic-tac-toe menu.
     pub fn go_to_ttt_menu(&mut self) {
         self.current_scene = Scene::TTTMenu(Menu::new(TTT_MENU_OPTIONS.to_vec()));
+    }
+
+    /// Goes to the online tic-tac-toe menu.
+    pub fn go_to_online_ttt_menu(&mut self) {
+        self.current_scene = Scene::OnlineTTTMenu(Menu::new(ONLINE_TTT_MENU_OPTIONS.to_vec()));
     }
 
     /// Goes to the ultimate tic-tac-toe menu.
@@ -125,6 +173,7 @@ impl App {
         match &mut self.current_scene {
             Scene::MainMenu(menu)
             | Scene::TTTMenu(menu)
+            | Scene::OnlineTTTMenu(menu)
             | Scene::UTTMenu(menu)
             | Scene::AIMenu(menu, _) => menu.move_up(),
             Scene::PlayingTTT(game) => game.input_up(),
@@ -139,6 +188,7 @@ impl App {
         match &mut self.current_scene {
             Scene::MainMenu(menu)
             | Scene::TTTMenu(menu)
+            | Scene::OnlineTTTMenu(menu)
             | Scene::UTTMenu(menu)
             | Scene::AIMenu(menu, _) => menu.move_down(),
             Scene::PlayingTTT(game) => game.input_down(),
@@ -161,6 +211,7 @@ impl App {
                 "Local PvP" => self.start_ttt_game(GameMode::LocalPvP),
                 "Play vs AI" => self.go_to_ai_menu(AIMenuStatus::TTTpve),
                 "AI vs AI" => self.go_to_ai_menu(AIMenuStatus::TTTeve(None)),
+                "Online PvP" => self.go_to_online_ttt_menu(),
                 "Back" => self.go_to_main_menu(),
                 _ => panic!("Option selected in Tic Tac Toe Menu does not exist."),
             },
@@ -170,6 +221,11 @@ impl App {
                 "AI vs AI" => self.go_to_ai_menu(AIMenuStatus::UTTeve(None)),
                 "Back" => self.go_to_main_menu(),
                 _ => panic!("Option selected in Ultimate Tic Tac Toe Menu does not exist."),
+            },
+            Scene::OnlineTTTMenu(menu) => match menu.get_selected() {
+                "Host Match" | "Join Match" => {}
+                "Back" => self.go_to_ttt_menu(),
+                _ => panic!("Option selected in Online Tic Tac Toe Menu does not exist."),
             },
             Scene::AIMenu(menu, status) => {
                 let selected_option = menu.get_selected();
@@ -232,6 +288,7 @@ impl App {
         match &mut self.current_scene {
             Scene::MainMenu(_) => self.quit(),
             Scene::TTTMenu(_) => self.go_to_main_menu(),
+            Scene::OnlineTTTMenu(_) => self.go_to_ttt_menu(),
             Scene::UTTMenu(_) => self.go_to_main_menu(),
             Scene::AIMenu(_, status) => match status {
                 AIMenuStatus::TTTpve => self.go_to_ttt_menu(),
@@ -302,6 +359,42 @@ mod tests {
         app.stop_network();
         assert!(!app.network_is_active());
         assert_eq!(app.network_status, NetworkStatus::Idle);
+    }
+
+    #[test]
+    fn test_online_command_starts_network_and_reports_invalid_ticket() {
+        let mut app = App::new();
+
+        app.join_online_match("invalid ticket".to_string()).unwrap();
+        assert!(app.network_is_active());
+
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1);
+        while std::time::Instant::now() < deadline {
+            app.poll_network_events();
+            if matches!(app.network_status, NetworkStatus::Failed(_)) {
+                break;
+            }
+            std::thread::yield_now();
+        }
+
+        assert!(matches!(app.network_status, NetworkStatus::Failed(_)));
+    }
+
+    #[test]
+    fn test_opening_online_menu_does_not_start_network() {
+        let mut app = App::new();
+        app.go_to_ttt_menu();
+        app.handle_down();
+        app.handle_down();
+        app.handle_down();
+
+        app.handle_enter();
+
+        assert!(matches!(app.current_scene, Scene::OnlineTTTMenu(_)));
+        assert!(!app.network_is_active());
+
+        app.handle_esc();
+        assert!(matches!(app.current_scene, Scene::TTTMenu(_)));
     }
 
     #[test]

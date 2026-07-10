@@ -18,6 +18,7 @@ pub fn render(f: &mut Frame, app: &App) {
     match &app.current_scene {
         Scene::MainMenu(menu) => render_menu(f, menu, "Select Game"),
         Scene::TTTMenu(menu) | Scene::UTTMenu(menu) => render_menu(f, menu, "Select Game Mode"),
+        Scene::OnlineTTTMenu(menu) => render_menu(f, menu, "Online Tic Tac Toe"),
         Scene::AIMenu(menu, status) => render_menu(f, menu, ai_menu_title(status)),
         Scene::PlayingTTT(game) => render_game_ttt(f, game),
         Scene::PlayingUTT(game) => render_game_utt(f, game),
@@ -26,7 +27,7 @@ pub fn render(f: &mut Frame, app: &App) {
 
 /// Renders the main menu screen with game options.
 fn render_menu(f: &mut Frame, menu: &Menu, title: &str) {
-    if render_size_warning(f, 14, 10) {
+    if render_size_warning(f, 14, 13) {
         return;
     }
 
@@ -35,7 +36,7 @@ fn render_menu(f: &mut Frame, menu: &Menu, title: &str) {
         .margin(0)
         .constraints([
             Constraint::Max(7),
-            Constraint::Min(11),
+            Constraint::Min(13),
             Constraint::Length(3),
         ])
         .split(f.area());
@@ -93,7 +94,7 @@ fn render_title(f: &mut Frame, area: Rect) {
 
 /// Renders the menu options with highlighting for the selected option.
 fn render_menu_options(f: &mut Frame, area: Rect, menu: &Menu, title: &str) {
-    let options_area = center_rect(area, 30, 11);
+    let options_area = center_rect(area, 30, 13);
 
     let mut lines = vec![Line::from("")];
 
