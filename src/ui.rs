@@ -2,7 +2,7 @@ use crate::app::App;
 use crate::game::base::SmallBoard;
 use crate::game::{Board, GameState, Mark};
 use crate::network::NetworkStatus;
-use crate::scenes::{AIMenuStatus, GameMode, GamePlayTTT, GamePlayUTT, Menu, Scene};
+use crate::scenes::{AIMenuStatus, GameMode, GamePlayTTT, GamePlayUTT, Menu, Scene, TicketInput};
 use crate::utils::Position;
 use ratatui::{
     Frame,
@@ -13,6 +13,10 @@ use ratatui::{
 };
 
 const PURPLE: Color = Color::Indexed(93);
+const TICKET_GROUP_SIZE: usize = 4;
+const TICKET_GROUPS_PER_LINE: usize = 6;
+const TICKET_LINE_WIDTH: u16 =
+    (TICKET_GROUP_SIZE * TICKET_GROUPS_PER_LINE + TICKET_GROUPS_PER_LINE - 1) as u16;
 
 /// Main render function that delegates to the appropriate screen renderer.
 pub fn render(f: &mut Frame, app: &App) {
@@ -21,6 +25,7 @@ pub fn render(f: &mut Frame, app: &App) {
         Scene::TTTMenu(menu) | Scene::UTTMenu(menu) => render_menu(f, menu, "Select Game Mode"),
         Scene::OnlineTTTMenu(menu) => render_menu(f, menu, "Online Tic Tac Toe"),
         Scene::HostingOnlineTTT => render_hosting_ttt(f, &app.network_status),
+        Scene::JoiningOnlineTTT(input) => render_joining_ttt(f, input, &app.network_status),
         Scene::AIMenu(menu, status) => render_menu(f, menu, ai_menu_title(status)),
         Scene::PlayingTTT(game) => render_game_ttt(f, game),
         Scene::PlayingUTT(game) => render_game_utt(f, game),
@@ -98,6 +103,8 @@ fn render_hosting_ttt(f: &mut Frame, status: &NetworkStatus) {
             Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
         ),
     };
+    let header_area = center_rect(content[0], 60, 3);
+
     let header = Paragraph::new(message)
         .style(style)
         .alignment(Alignment::Center)
@@ -107,7 +114,7 @@ fn render_hosting_ttt(f: &mut Frame, status: &NetworkStatus) {
                 .border_type(BorderType::Rounded)
                 .title("Host Online Match"),
         );
-    f.render_widget(header, content[0]);
+    f.render_widget(header, header_area);
 
     match status {
         NetworkStatus::Hosting { ticket, .. } => {
@@ -125,9 +132,10 @@ fn render_hosting_ttt(f: &mut Frame, status: &NetworkStatus) {
                 .into_iter()
                 .map(|line| Line::from(Span::styled(line, Style::default().fg(Color::LightYellow))))
                 .collect::<Vec<_>>();
+            let ticket_area = center_rect(content[2], 32, 8);
             f.render_widget(
                 Paragraph::new(ticket).alignment(Alignment::Center),
-                content[2],
+                ticket_area,
             );
         }
         NetworkStatus::Failed(error) => {
@@ -144,15 +152,100 @@ fn render_hosting_ttt(f: &mut Frame, status: &NetworkStatus) {
     render_instructions(f, chunks[2], &["Esc: Cancel | Q: Quit".to_string()]);
 }
 
+fn render_joining_ttt(f: &mut Frame, input: &TicketInput, status: &NetworkStatus) {
+    if render_size_warning(f, 40, 12) {
+        return;
+    }
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Max(7),
+            Constraint::Min(13),
+            Constraint::Length(3),
+        ])
+        .split(f.area());
+    render_title(f, chunks[0]);
+
+    let width = chunks[1].width.saturating_sub(4).min(90);
+    let area = center_rect(chunks[1], width, 13);
+    let content = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Length(10),
+            Constraint::Min(1),
+        ])
+        .split(area);
+
+    let (message, style) = match status {
+        NetworkStatus::Idle => ("Enter host ticket", Style::default().fg(Color::LightYellow)),
+        NetworkStatus::Connecting => ("Connecting...", Style::default().fg(Color::Yellow)),
+        NetworkStatus::Connected => (
+            "Connected",
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        ),
+        NetworkStatus::Failed(_) => (
+            "Unable to join match",
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        ),
+        NetworkStatus::Hosting { .. } => ("Enter host ticket", Style::default()),
+    };
+    let header_area = center_rect(content[0], 60, 3);
+    f.render_widget(
+        Paragraph::new(message)
+            .style(style)
+            .alignment(Alignment::Center)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded)
+                    .title("Join Online Match"),
+            ),
+        header_area,
+    );
+
+    let formatted_ticket = format_ticket_lines(&input.value).join("\n");
+    let ticket_area = center_rect(
+        content[1],
+        (TICKET_LINE_WIDTH + 4).min(content[1].width),
+        content[1].height,
+    );
+    f.render_widget(
+        Paragraph::new(formatted_ticket)
+            .alignment(Alignment::Center)
+            .wrap(Wrap { trim: false })
+            .block(Block::default().borders(Borders::ALL).title("Ticket")),
+        ticket_area,
+    );
+
+    if let NetworkStatus::Failed(error) = status {
+        f.render_widget(
+            Paragraph::new(format!("Error: {error}"))
+                .style(Style::default().fg(Color::Red))
+                .alignment(Alignment::Center),
+            content[2],
+        );
+    }
+
+    render_instructions(
+        f,
+        chunks[2],
+        &["Paste ticket | Enter: Connect | Esc: Cancel".to_string()],
+    );
+}
+
 fn format_ticket_lines(ticket: &str) -> Vec<String> {
     let characters = ticket.chars().collect::<Vec<_>>();
     let groups = characters
-        .chunks(4)
+        .chunks(TICKET_GROUP_SIZE)
         .map(|chunk| chunk.iter().collect::<String>())
         .collect::<Vec<_>>();
 
     groups
-        .chunks(6)
+        .chunks(TICKET_GROUPS_PER_LINE)
         .map(|line| line.join(" "))
         .collect::<Vec<_>>()
 }

@@ -52,6 +52,8 @@ where
             if let Event::Key(key) = event::read()? {
                 if key.kind == KeyEventKind::Press {
                     match key.code {
+                        KeyCode::Char(character)
+                            if app.handle_text_input(&character.to_string()) => {}
                         KeyCode::Char('q') | KeyCode::Char('Q') => {
                             app.quit();
                         }
@@ -81,6 +83,9 @@ where
                         }
                         KeyCode::Esc => {
                             app.handle_esc();
+                        }
+                        KeyCode::Backspace => {
+                            app.handle_backspace();
                         }
                         _ => {}
                     }

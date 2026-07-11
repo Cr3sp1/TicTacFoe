@@ -20,10 +20,30 @@ pub enum Scene {
     TTTMenu(Menu),
     OnlineTTTMenu(Menu),
     HostingOnlineTTT,
+    JoiningOnlineTTT(TicketInput),
     UTTMenu(Menu),
     AIMenu(Menu, AIMenuStatus),
     PlayingTTT(GamePlayTTT),
     PlayingUTT(GamePlayUTT),
+}
+
+/// Editable iroh ticket text used by the join screen.
+#[derive(Default)]
+pub struct TicketInput {
+    pub value: String,
+}
+
+impl TicketInput {
+    /// Appends typed or pasted ticket text.
+    pub fn push_str(&mut self, value: &str) {
+        self.value
+            .extend(value.chars().filter(|character| !character.is_whitespace()));
+    }
+
+    /// Removes the final entered character.
+    pub fn backspace(&mut self) {
+        self.value.pop();
+    }
 }
 
 pub enum AIMenuStatus {

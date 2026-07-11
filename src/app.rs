@@ -9,7 +9,7 @@ use crate::game::ultimate::BigBoard;
 use crate::network::{NetworkClient, NetworkCommand, NetworkStatus};
 use crate::scenes::{
     AI_MENU_OPTIONS, AIMenuStatus, GameMode, GamePlayTTT, GamePlayUTT, MAIN_MENU_OPTIONS, Menu,
-    ONLINE_TTT_MENU_OPTIONS, Scene, TTT_MENU_OPTIONS, UTT_MENU_OPTIONS,
+    ONLINE_TTT_MENU_OPTIONS, Scene, TTT_MENU_OPTIONS, TicketInput, UTT_MENU_OPTIONS,
 };
 
 /// Main application state manager.
@@ -147,6 +147,66 @@ impl App {
         }
     }
 
+    /// Opens the ticket-entry screen for joining a classic online match.
+    pub fn start_joining_online_ttt(&mut self) {
+        self.network_status = NetworkStatus::Idle;
+        self.current_scene = Scene::JoiningOnlineTTT(TicketInput::default());
+    }
+
+    /// Adds pasted or typed text to the active ticket input.
+    pub fn handle_text_input(&mut self, value: &str) -> bool {
+        if !matches!(
+            &self.network_status,
+            NetworkStatus::Idle | NetworkStatus::Failed(_)
+        ) {
+            return false;
+        }
+        let Scene::JoiningOnlineTTT(input) = &mut self.current_scene else {
+            return false;
+        };
+        input.push_str(value);
+        if matches!(&self.network_status, NetworkStatus::Failed(_)) {
+            self.network_status = NetworkStatus::Idle;
+        }
+        true
+    }
+
+    /// Removes the final character from the active ticket input.
+    pub fn handle_backspace(&mut self) {
+        if matches!(
+            &self.network_status,
+            NetworkStatus::Idle | NetworkStatus::Failed(_)
+        ) {
+            if let Scene::JoiningOnlineTTT(input) = &mut self.current_scene {
+                input.backspace();
+                if matches!(&self.network_status, NetworkStatus::Failed(_)) {
+                    self.network_status = NetworkStatus::Idle;
+                }
+            }
+        }
+    }
+
+    fn submit_joining_online_ttt(&mut self) {
+        if !matches!(
+            &self.network_status,
+            NetworkStatus::Idle | NetworkStatus::Failed(_)
+        ) {
+            return;
+        }
+        let Scene::JoiningOnlineTTT(input) = &self.current_scene else {
+            return;
+        };
+        if input.value.trim().is_empty() {
+            self.network_status = NetworkStatus::Failed("ticket cannot be empty".to_string());
+            return;
+        }
+        let ticket = input.value.clone();
+        self.network_status = NetworkStatus::Connecting;
+        if let Err(error) = self.join_online_match(ticket) {
+            self.network_status = NetworkStatus::Failed(error.to_string());
+        }
+    }
+
     /// Goes to the ultimate tic-tac-toe menu.
     pub fn go_to_utt_menu(&mut self) {
         self.current_scene = Scene::UTTMenu(Menu::new(UTT_MENU_OPTIONS.to_vec()));
@@ -185,7 +245,7 @@ impl App {
             | Scene::OnlineTTTMenu(menu)
             | Scene::UTTMenu(menu)
             | Scene::AIMenu(menu, _) => menu.move_up(),
-            Scene::HostingOnlineTTT => {}
+            Scene::HostingOnlineTTT | Scene::JoiningOnlineTTT(_) => {}
             Scene::PlayingTTT(game) => game.input_up(),
             Scene::PlayingUTT(game) => game.input_up(),
         }
@@ -201,7 +261,7 @@ impl App {
             | Scene::OnlineTTTMenu(menu)
             | Scene::UTTMenu(menu)
             | Scene::AIMenu(menu, _) => menu.move_down(),
-            Scene::HostingOnlineTTT => {}
+            Scene::HostingOnlineTTT | Scene::JoiningOnlineTTT(_) => {}
             Scene::PlayingTTT(game) => game.input_down(),
             Scene::PlayingUTT(game) => game.input_down(),
         }
@@ -235,7 +295,7 @@ impl App {
             },
             Scene::OnlineTTTMenu(menu) => match menu.get_selected() {
                 "Host Match" => self.start_hosting_online_ttt(),
-                "Join Match" => {}
+                "Join Match" => self.start_joining_online_ttt(),
                 "Back" => self.go_to_ttt_menu(),
                 _ => panic!("Option selected in Online Tic Tac Toe Menu does not exist."),
             },
@@ -289,6 +349,7 @@ impl App {
                 }
             }
             Scene::HostingOnlineTTT => {}
+            Scene::JoiningOnlineTTT(_) => self.submit_joining_online_ttt(),
             Scene::PlayingTTT(game) => game.play_move(),
             Scene::PlayingUTT(game) => game.input_enter(),
         }
@@ -303,6 +364,10 @@ impl App {
             Scene::TTTMenu(_) => self.go_to_main_menu(),
             Scene::OnlineTTTMenu(_) => self.go_to_ttt_menu(),
             Scene::HostingOnlineTTT => {
+                self.stop_network();
+                self.go_to_online_ttt_menu();
+            }
+            Scene::JoiningOnlineTTT(_) => {
                 self.stop_network();
                 self.go_to_online_ttt_menu();
             }
@@ -423,6 +488,37 @@ mod tests {
 
         assert!(matches!(app.current_scene, Scene::HostingOnlineTTT));
         assert!(app.network_is_active());
+
+        app.handle_esc();
+        assert!(matches!(app.current_scene, Scene::OnlineTTTMenu(_)));
+        assert!(!app.network_is_active());
+        assert_eq!(app.network_status, NetworkStatus::Idle);
+    }
+
+    #[test]
+    fn test_join_ticket_input_and_cancellation() {
+        let mut app = App::new();
+        app.go_to_online_ttt_menu();
+        app.handle_down();
+        app.handle_enter();
+
+        assert!(matches!(app.current_scene, Scene::JoiningOnlineTTT(_)));
+        assert!(!app.network_is_active());
+
+        app.handle_enter();
+        assert_eq!(
+            app.network_status,
+            NetworkStatus::Failed("Ticket cannot be empty".to_string())
+        );
+        assert!(!app.network_is_active());
+
+        assert!(app.handle_text_input("abcd efgh\nijkl\t"));
+        assert_eq!(app.network_status, NetworkStatus::Idle);
+        app.handle_backspace();
+        let Scene::JoiningOnlineTTT(input) = &app.current_scene else {
+            panic!("expected ticket input scene");
+        };
+        assert_eq!(input.value, "abcdefghijk");
 
         app.handle_esc();
         assert!(matches!(app.current_scene, Scene::OnlineTTTMenu(_)));
