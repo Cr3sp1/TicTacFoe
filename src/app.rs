@@ -508,7 +508,7 @@ mod tests {
         app.handle_enter();
         assert_eq!(
             app.network_status,
-            NetworkStatus::Failed("Ticket cannot be empty".to_string())
+            NetworkStatus::Failed("ticket cannot be empty".to_string())
         );
         assert!(!app.network_is_active());
 
