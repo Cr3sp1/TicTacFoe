@@ -17,7 +17,7 @@ pub enum NetworkCommand {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum NetworkEvent {
-    Hosting { ticket: String },
+    Hosting { ticket: String, relay_ready: bool },
     Connecting,
     Connected,
     Disconnected,
@@ -30,6 +30,7 @@ pub enum NetworkStatus {
     Idle,
     Hosting {
         ticket: String,
+        relay_ready: bool,
     },
     Connecting,
     Connected,
@@ -39,7 +40,13 @@ pub enum NetworkStatus {
 impl From<NetworkEvent> for NetworkStatus {
     fn from(event: NetworkEvent) -> Self {
         match event {
-            NetworkEvent::Hosting { ticket } => Self::Hosting { ticket },
+            NetworkEvent::Hosting {
+                ticket,
+                relay_ready,
+            } => Self::Hosting {
+                ticket,
+                relay_ready,
+            },
             NetworkEvent::Connecting => Self::Connecting,
             NetworkEvent::Connected => Self::Connected,
             NetworkEvent::Disconnected => Self::Idle,
@@ -71,7 +78,6 @@ pub async fn create_endpoint() -> Result<Endpoint, BindError> {
 pub async fn create_host() -> Result<(Endpoint, String), BindError> {
     let endpoint = create_endpoint().await?;
 
-    endpoint.online().await;
     let ticket = encode_ticket(endpoint.addr());
 
     Ok((endpoint, ticket))
@@ -225,15 +231,34 @@ async fn close_session(session: NetworkSession) {
 
 async fn host_session(event_tx: mpsc::Sender<NetworkEvent>) -> Result<NetworkSession, String> {
     let (endpoint, ticket) = create_host().await.map_err(|error| error.to_string())?;
-    let _ = event_tx.send(NetworkEvent::Hosting { ticket });
-    let connection = accept_connection(&endpoint)
-        .await
-        .ok_or_else(|| "endpoint closed while hosting".to_string())?
-        .map_err(|error| error.to_string())?;
+    let _ = event_tx.send(NetworkEvent::Hosting {
+        ticket,
+        relay_ready: false,
+    });
+
+    let connection = tokio::select! {
+        connection = wait_for_connection(&endpoint) => connection?,
+        () = endpoint.online() => {
+            let ticket = encode_ticket(endpoint.addr());
+            let _ = event_tx.send(NetworkEvent::Hosting {
+                ticket,
+                relay_ready: true,
+            });
+            wait_for_connection(&endpoint).await?
+        }
+    };
+
     Ok(NetworkSession {
         endpoint,
         connection,
     })
+}
+
+async fn wait_for_connection(endpoint: &Endpoint) -> Result<Connection, String> {
+    accept_connection(endpoint)
+        .await
+        .ok_or_else(|| "endpoint closed while hosting".to_string())?
+        .map_err(|error| error.to_string())
 }
 
 async fn join_session(
@@ -267,6 +292,29 @@ mod tests {
             .recv_timeout(std::time::Duration::from_secs(1))
             .unwrap();
         assert_eq!(event, NetworkEvent::Disconnected);
+    }
+
+    #[test]
+    fn test_hosting_emits_lan_ticket_before_relay_is_ready() {
+        let client = NetworkClient::start().unwrap();
+
+        client.send(NetworkCommand::Host).unwrap();
+
+        let event = client
+            .event_rx
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .unwrap();
+        let NetworkEvent::Hosting {
+            ticket,
+            relay_ready,
+        } = event
+        else {
+            panic!("expected hosting event");
+        };
+        assert!(!relay_ready);
+
+        let addr = decode_ticket(&ticket).unwrap();
+        assert!(addr.ip_addrs().next().is_some());
     }
 
     #[test]

@@ -76,8 +76,12 @@ fn render_hosting_ttt(f: &mut Frame, status: &NetworkStatus) {
 
     let (message, style) = match status {
         NetworkStatus::Idle => ("Starting network...", Style::default().fg(Color::Yellow)),
-        NetworkStatus::Hosting { .. } => (
-            "Waiting for opponent",
+        NetworkStatus::Hosting { relay_ready, .. } => (
+            if *relay_ready {
+                "LAN and internet ready"
+            } else {
+                "LAN ready - preparing internet connectivity"
+            },
             Style::default()
                 .fg(Color::LightYellow)
                 .add_modifier(Modifier::BOLD),
@@ -106,7 +110,7 @@ fn render_hosting_ttt(f: &mut Frame, status: &NetworkStatus) {
     f.render_widget(header, content[0]);
 
     match status {
-        NetworkStatus::Hosting { ticket } => {
+        NetworkStatus::Hosting { ticket, .. } => {
             f.render_widget(
                 Paragraph::new("Copy and share this ticket:")
                     .alignment(Alignment::Center)
