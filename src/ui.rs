@@ -373,10 +373,10 @@ fn render_ttt_board(f: &mut Frame, area: Rect, game: &GamePlayTTT) {
     // Add current player or game result
     let (status, status_style) = game_status(game.board.state, game.active_player);
 
-    let selection = if matches!(game.mode, GameMode::EvE(_, _)) {
-        None
-    } else {
-        Some((game.selected, game.active_player))
+    let selection = match game.mode {
+        GameMode::EvE(_, _) => None,
+        GameMode::OnlinePvP(local_mark) if local_mark != game.active_player => None,
+        _ => Some((game.selected, game.active_player)),
     };
 
     // Render the board
@@ -388,6 +388,7 @@ fn render_ttt_board(f: &mut Frame, area: Rect, game: &GamePlayTTT) {
         GameMode::PvE(_) => "Mode: Play vs AI",
         GameMode::EvE(_, _) => "Mode: AI vs AI",
         GameMode::LocalPvP => "Mode: Local PvP",
+        GameMode::OnlinePvP(_) => "Mode: Online PvP",
     };
 
     let game_block = game_block(mode_name, status.as_str(), status_style);
@@ -485,6 +486,14 @@ fn ttt_board_line(
 fn render_ttt_instructions(f: &mut Frame, area: Rect, game: &GamePlayTTT) {
     let instructions = if game.board.state == GameState::Playing {
         match game.mode {
+            GameMode::OnlinePvP(local_mark) if local_mark != game.active_player => vec![
+                "Waiting for opponent".to_string(),
+                "M: Main Menu | Q: Quit".to_string(),
+            ],
+            GameMode::OnlinePvP(_) => vec![
+                "Arrow Keys: Move | Enter: Place Mark".to_string(),
+                "M: Main Menu | Q: Quit".to_string(),
+            ],
             GameMode::EvE(_, _) => {
                 if game.turn == 0 {
                     vec![
@@ -613,6 +622,7 @@ fn render_utt_board(f: &mut Frame, area: Rect, game: &GamePlayUTT) {
         GameMode::PvE(_) => "Mode: Play vs AI",
         GameMode::EvE(_, _) => "Mode: AI vs AI",
         GameMode::LocalPvP => "Mode: Local PvP",
+        GameMode::OnlinePvP(_) => "Mode: Online PvP",
     };
 
     let game_block = game_block(mode_name, status.as_str(), status_style);

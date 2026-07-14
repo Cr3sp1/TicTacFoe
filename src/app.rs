@@ -84,7 +84,9 @@ impl App {
             let Ok(event) = client.try_recv() else {
                 return;
             };
-            self.network_status = event.into();
+            if let Some(status) = event.into_status() {
+                self.network_status = status;
+            }
         }
     }
 
@@ -350,7 +352,9 @@ impl App {
             }
             Scene::HostingOnlineTTT => {}
             Scene::JoiningOnlineTTT(_) => self.submit_joining_online_ttt(),
-            Scene::PlayingTTT(game) => game.play_move(),
+            Scene::PlayingTTT(game) => {
+                game.play_move();
+            }
             Scene::PlayingUTT(game) => game.input_enter(),
         }
     }
