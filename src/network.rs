@@ -7,7 +7,7 @@ use iroh::{
     endpoint::{BindError, ConnectError, ConnectingError, Connection, presets},
 };
 use iroh_tickets::{ParseError, endpoint::EndpointTicket};
-use std::{io, sync::mpsc, thread};
+use std::{fmt, io, sync::mpsc, thread};
 use tokio::{runtime::Builder, sync::mpsc as tokio_mpsc, task::JoinHandle};
 
 pub const ALPN: &[u8] = b"/tic-tac-foe/1";
@@ -28,6 +28,7 @@ pub enum NetworkEvent {
     Connected { mark: Mark },
     MoveReceived(MoveMessage),
     NewRoundReceived { starting_mark: Mark },
+    OpponentDisconnected,
     Disconnected,
     Failed(String),
 }
@@ -44,6 +45,7 @@ pub enum NetworkStatus {
     Connected {
         mark: Mark,
     },
+    OpponentDisconnected,
     Failed(String),
 }
 
@@ -60,6 +62,7 @@ impl NetworkEvent {
             NetworkEvent::Connecting => Some(NetworkStatus::Connecting),
             NetworkEvent::Connected { mark } => Some(NetworkStatus::Connected { mark }),
             NetworkEvent::MoveReceived(_) | NetworkEvent::NewRoundReceived { .. } => None,
+            NetworkEvent::OpponentDisconnected => Some(NetworkStatus::OpponentDisconnected),
             NetworkEvent::Disconnected => Some(NetworkStatus::Idle),
             NetworkEvent::Failed(error) => Some(NetworkStatus::Failed(error)),
         }
@@ -258,7 +261,13 @@ async fn run_network_worker(
                     Ok(GameMessage::NewRound { starting_mark }) => {
                         let _ = event_tx.send(NetworkEvent::NewRoundReceived { starting_mark });
                     }
-                    Err(error) => {
+                    Err(ReceiveGameMessageError::Disconnected(_)) => {
+                        if let Some(session) = session.take() {
+                            close_session(session).await;
+                        }
+                        let _ = event_tx.send(NetworkEvent::OpponentDisconnected);
+                    }
+                    Err(ReceiveGameMessageError::InvalidMessage(error)) => {
                         if let Some(session) = session.take() {
                             close_session(session).await;
                         }
@@ -296,7 +305,7 @@ async fn send_worker_game_message(
 
 async fn receive_session_game_message(
     connection: Option<Connection>,
-) -> Result<GameMessage, String> {
+) -> Result<GameMessage, ReceiveGameMessageError> {
     match connection {
         Some(connection) => receive_game_message(&connection).await,
         None => std::future::pending().await,
@@ -437,16 +446,35 @@ pub async fn send_game_message(
     send.finish().map_err(|error| error.to_string())
 }
 
-pub async fn receive_game_message(connection: &Connection) -> Result<GameMessage, String> {
+#[derive(Debug)]
+pub enum ReceiveGameMessageError {
+    Disconnected(String),
+    InvalidMessage(String),
+}
+
+impl fmt::Display for ReceiveGameMessageError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Disconnected(error) | Self::InvalidMessage(error) => formatter.write_str(error),
+        }
+    }
+}
+
+impl std::error::Error for ReceiveGameMessageError {}
+
+pub async fn receive_game_message(
+    connection: &Connection,
+) -> Result<GameMessage, ReceiveGameMessageError> {
     let mut receive = connection
         .accept_uni()
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| ReceiveGameMessageError::Disconnected(error.to_string()))?;
     let bytes = receive
         .read_to_end(MAX_GAME_MESSAGE_SIZE)
         .await
-        .map_err(|error| error.to_string())?;
-    protocol::decode_game_message(&bytes).map_err(|error| error.to_string())
+        .map_err(|error| ReceiveGameMessageError::InvalidMessage(error.to_string()))?;
+    protocol::decode_game_message(&bytes)
+        .map_err(|error| ReceiveGameMessageError::InvalidMessage(error.to_string()))
 }
 
 #[cfg(test)]
@@ -566,7 +594,7 @@ mod tests {
     }
 
     #[test]
-    fn test_workers_exchange_move_event() {
+    fn test_workers_exchange_game_events_and_disconnect() {
         let host = NetworkClient::start().unwrap();
         let joiner = NetworkClient::start().unwrap();
 
@@ -599,6 +627,21 @@ mod tests {
         })
         .unwrap();
         assert_eq!(wait_for_new_round(&joiner), Mark::X);
+
+        host.send(NetworkCommand::Disconnect).unwrap();
+        assert_eq!(
+            host.event_rx
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .unwrap(),
+            NetworkEvent::Disconnected
+        );
+        assert_eq!(
+            joiner
+                .event_rx
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .unwrap(),
+            NetworkEvent::OpponentDisconnected
+        );
     }
 
     fn wait_for_connected_mark(client: &NetworkClient) -> Mark {

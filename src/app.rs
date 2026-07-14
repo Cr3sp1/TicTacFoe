@@ -262,8 +262,13 @@ impl App {
 
     /// Handles left arrow or 'h' key input.
     pub fn handle_left(&mut self) {
+        let online_frozen = matches!(self.network_status, NetworkStatus::OpponentDisconnected);
         match &mut self.current_scene {
-            Scene::PlayingTTT(game) => game.input_left(),
+            Scene::PlayingTTT(game)
+                if !online_frozen || !matches!(game.mode, GameMode::OnlinePvP(_)) =>
+            {
+                game.input_left()
+            }
             Scene::PlayingUTT(game) => game.input_left(),
             _ => {}
         }
@@ -271,8 +276,13 @@ impl App {
 
     /// Handles right arrow or 'l' key input.
     pub fn handle_right(&mut self) {
+        let online_frozen = matches!(self.network_status, NetworkStatus::OpponentDisconnected);
         match &mut self.current_scene {
-            Scene::PlayingTTT(game) => game.input_right(),
+            Scene::PlayingTTT(game)
+                if !online_frozen || !matches!(game.mode, GameMode::OnlinePvP(_)) =>
+            {
+                game.input_right()
+            }
             Scene::PlayingUTT(game) => game.input_right(),
             _ => {}
         }
@@ -282,6 +292,7 @@ impl App {
     ///
     /// Moves menu selection up in main menu, or board selection up in game.
     pub fn handle_up(&mut self) {
+        let online_frozen = matches!(self.network_status, NetworkStatus::OpponentDisconnected);
         match &mut self.current_scene {
             Scene::MainMenu(menu)
             | Scene::TTTMenu(menu)
@@ -289,7 +300,12 @@ impl App {
             | Scene::UTTMenu(menu)
             | Scene::AIMenu(menu, _) => menu.move_up(),
             Scene::HostingOnlineTTT | Scene::JoiningOnlineTTT(_) => {}
-            Scene::PlayingTTT(game) => game.input_up(),
+            Scene::PlayingTTT(game)
+                if !online_frozen || !matches!(game.mode, GameMode::OnlinePvP(_)) =>
+            {
+                game.input_up()
+            }
+            Scene::PlayingTTT(_) => {}
             Scene::PlayingUTT(game) => game.input_up(),
         }
     }
@@ -298,6 +314,7 @@ impl App {
     ///
     /// Moves menu selection down in main menu, or board selection down in game.
     pub fn handle_down(&mut self) {
+        let online_frozen = matches!(self.network_status, NetworkStatus::OpponentDisconnected);
         match &mut self.current_scene {
             Scene::MainMenu(menu)
             | Scene::TTTMenu(menu)
@@ -305,18 +322,27 @@ impl App {
             | Scene::UTTMenu(menu)
             | Scene::AIMenu(menu, _) => menu.move_down(),
             Scene::HostingOnlineTTT | Scene::JoiningOnlineTTT(_) => {}
-            Scene::PlayingTTT(game) => game.input_down(),
+            Scene::PlayingTTT(game)
+                if !online_frozen || !matches!(game.mode, GameMode::OnlinePvP(_)) =>
+            {
+                game.input_down()
+            }
+            Scene::PlayingTTT(_) => {}
             Scene::PlayingUTT(game) => game.input_down(),
         }
     }
 
     fn play_ttt_move(&mut self) {
+        let online_connected = matches!(self.network_status, NetworkStatus::Connected { .. });
         let message = {
             let Scene::PlayingTTT(game) = &mut self.current_scene else {
                 return;
             };
             let selected = game.selected;
             let is_online = matches!(game.mode, GameMode::OnlinePvP(_));
+            if is_online && !online_connected {
+                return;
+            }
 
             if game.play_move() && is_online {
                 let row = u8::try_from(selected.row).expect("board row fits in u8");
@@ -454,7 +480,13 @@ impl App {
 
     /// Handles 's' key input to allow AI to play first in PvE mode.
     pub fn handle_second(&mut self) {
+        let online_connected = matches!(self.network_status, NetworkStatus::Connected { .. });
         let starting_mark = match &mut self.current_scene {
+            Scene::PlayingTTT(game)
+                if matches!(game.mode, GameMode::OnlinePvP(_)) && !online_connected =>
+            {
+                None
+            }
             Scene::PlayingTTT(game) if matches!(game.mode, GameMode::OnlinePvP(_)) => {
                 game.yield_online_first_move()
             }
@@ -475,7 +507,13 @@ impl App {
 
     /// Handles 'r' key input to reset the current game.
     pub fn handle_reset(&mut self) {
+        let online_connected = matches!(self.network_status, NetworkStatus::Connected { .. });
         let starting_mark = match &mut self.current_scene {
+            Scene::PlayingTTT(game)
+                if matches!(game.mode, GameMode::OnlinePvP(_)) && !online_connected =>
+            {
+                None
+            }
             Scene::PlayingTTT(game) if matches!(game.mode, GameMode::OnlinePvP(_)) => {
                 game.request_online_reset()
             }
@@ -624,6 +662,28 @@ mod tests {
         assert_eq!(game.board.state, GameState::Playing);
         assert_eq!(game.active_player, O);
         assert_eq!(game.turn, 0);
+    }
+
+    #[test]
+    fn test_opponent_disconnect_freezes_online_game() {
+        let mut app = App::new();
+        app.handle_network_event(NetworkEvent::Connected { mark: X });
+        app.handle_network_event(NetworkEvent::OpponentDisconnected);
+
+        app.handle_right();
+        app.handle_enter();
+        app.handle_second();
+        app.handle_reset();
+
+        assert_eq!(app.network_status, NetworkStatus::OpponentDisconnected);
+        let Scene::PlayingTTT(game) = &app.current_scene else {
+            panic!("expected online tic tac toe game");
+        };
+        assert_eq!(game.selected.row, 0);
+        assert_eq!(game.selected.col, 0);
+        assert_eq!(game.turn, 0);
+        assert_eq!(game.active_player, X);
+        assert!(game.board.get(0, 0).is_none());
     }
 
     #[test]

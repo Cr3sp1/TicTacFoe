@@ -27,7 +27,7 @@ pub fn render(f: &mut Frame, app: &App) {
         Scene::HostingOnlineTTT => render_hosting_ttt(f, &app.network_status),
         Scene::JoiningOnlineTTT(input) => render_joining_ttt(f, input, &app.network_status),
         Scene::AIMenu(menu, status) => render_menu(f, menu, ai_menu_title(status)),
-        Scene::PlayingTTT(game) => render_game_ttt(f, game),
+        Scene::PlayingTTT(game) => render_game_ttt(f, game, &app.network_status),
         Scene::PlayingUTT(game) => render_game_utt(f, game),
     }
 }
@@ -97,6 +97,10 @@ fn render_hosting_ttt(f: &mut Frame, status: &NetworkStatus) {
             Style::default()
                 .fg(Color::Green)
                 .add_modifier(Modifier::BOLD),
+        ),
+        NetworkStatus::OpponentDisconnected => (
+            "Opponent disconnected",
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
         ),
         NetworkStatus::Failed(_) => (
             "Unable to host match",
@@ -186,6 +190,10 @@ fn render_joining_ttt(f: &mut Frame, input: &TicketInput, status: &NetworkStatus
             Style::default()
                 .fg(Color::Green)
                 .add_modifier(Modifier::BOLD),
+        ),
+        NetworkStatus::OpponentDisconnected => (
+            "Opponent disconnected",
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
         ),
         NetworkStatus::Failed(_) => (
             "Unable to join match",
@@ -344,7 +352,7 @@ fn render_menu_instructions(f: &mut Frame, area: Rect) {
 }
 
 /// Renders the game screen with board and status.
-fn render_game_ttt(f: &mut Frame, game: &GamePlayTTT) {
+fn render_game_ttt(f: &mut Frame, game: &GamePlayTTT, network_status: &NetworkStatus) {
     if render_size_warning(f, 10, 10) {
         return;
     }
@@ -360,23 +368,26 @@ fn render_game_ttt(f: &mut Frame, game: &GamePlayTTT) {
         .split(f.area());
 
     render_title(f, chunks[0]);
-    render_ttt_board(f, chunks[1], game);
-    render_ttt_instructions(f, chunks[2], game);
+    render_ttt_board(f, chunks[1], game, network_status);
+    render_ttt_instructions(f, chunks[2], game, network_status);
 }
 
 /// Renders the tic-tac-toe board with current marks and selection highlight.
-fn render_ttt_board(f: &mut Frame, area: Rect, game: &GamePlayTTT) {
+fn render_ttt_board(f: &mut Frame, area: Rect, game: &GamePlayTTT, network_status: &NetworkStatus) {
     let board_area = center_rect(area, 25, 9);
 
     let mut lines = vec![Line::from("")];
 
     // Add current player or game result
-    let (status, status_style) = ttt_game_status(game);
+    let (status, status_style) = ttt_game_status(game, network_status);
 
-    let selection = match game.mode {
-        GameMode::EvE(_, _) => None,
-        GameMode::OnlinePvP(local_mark) if local_mark != game.active_player => None,
-        _ => Some((game.selected, game.active_player)),
+    let selection = match (&game.mode, network_status) {
+        (GameMode::OnlinePvP(_), NetworkStatus::OpponentDisconnected) => None,
+        _ => match game.mode {
+            GameMode::EvE(_, _) => None,
+            GameMode::OnlinePvP(local_mark) if local_mark != game.active_player => None,
+            _ => Some((game.selected, game.active_player)),
+        },
     };
 
     // Render the board
@@ -483,8 +494,17 @@ fn ttt_board_line(
 }
 
 /// Renders context-appropriate instructions for the game screen.
-fn render_ttt_instructions(f: &mut Frame, area: Rect, game: &GamePlayTTT) {
-    let instructions = if game.board.state == GameState::Playing {
+fn render_ttt_instructions(
+    f: &mut Frame,
+    area: Rect,
+    game: &GamePlayTTT,
+    network_status: &NetworkStatus,
+) {
+    let instructions = if matches!(game.mode, GameMode::OnlinePvP(_))
+        && matches!(network_status, NetworkStatus::OpponentDisconnected)
+    {
+        vec!["M: Main Menu | Q: Quit".to_string()]
+    } else if game.board.state == GameState::Playing {
         match game.mode {
             GameMode::OnlinePvP(local_mark) if local_mark != game.active_player => vec![
                 "Waiting for opponent".to_string(),
@@ -532,7 +552,17 @@ fn render_ttt_instructions(f: &mut Frame, area: Rect, game: &GamePlayTTT) {
     render_instructions(f, area, &instructions);
 }
 
-fn ttt_game_status(game: &GamePlayTTT) -> (String, Style) {
+fn ttt_game_status(game: &GamePlayTTT, network_status: &NetworkStatus) -> (String, Style) {
+    if matches!(game.mode, GameMode::OnlinePvP(_))
+        && matches!(network_status, NetworkStatus::OpponentDisconnected)
+    {
+        return (
+            "Opponent left the game".to_string(),
+            Style::default()
+                .fg(Color::Magenta)
+                .add_modifier(Modifier::BOLD),
+        );
+    }
     let (status, style) = game_status(game.board.state, game.active_player);
     if game.board.state == GameState::Playing
         && matches!(
@@ -833,12 +863,23 @@ mod tests {
     fn test_online_turn_status_uses_local_and_opponent_colors() {
         let mut game = GamePlayTTT::new(GameMode::OnlinePvP(Mark::O));
 
-        let (_, opponent_style) = ttt_game_status(&game);
+        let (_, opponent_style) =
+            ttt_game_status(&game, &NetworkStatus::Connected { mark: Mark::O });
         assert_eq!(opponent_style, Style::default());
 
         game.active_player = Mark::O;
-        let (_, local_style) = ttt_game_status(&game);
+        let (_, local_style) = ttt_game_status(&game, &NetworkStatus::Connected { mark: Mark::O });
         assert_eq!(local_style.fg, Some(Color::LightYellow));
+    }
+
+    #[test]
+    fn test_disconnected_opponent_replaces_online_game_status() {
+        let game = GamePlayTTT::new(GameMode::OnlinePvP(Mark::X));
+
+        let (status, style) = ttt_game_status(&game, &NetworkStatus::OpponentDisconnected);
+
+        assert_eq!(status, "Opponent left the game");
+        assert_eq!(style.fg, Some(Color::Magenta));
     }
 
     #[test]
