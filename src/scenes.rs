@@ -191,6 +191,59 @@ impl GamePlayTTT {
         true
     }
 
+    pub fn request_online_reset(&mut self) -> Option<Mark> {
+        let GameMode::OnlinePvP(local_mark) = self.mode else {
+            return None;
+        };
+        if self.board.state == GameState::Playing {
+            return None;
+        }
+
+        self.start_online_round(local_mark);
+        Some(local_mark)
+    }
+
+    pub fn yield_online_first_move(&mut self) -> Option<Mark> {
+        let GameMode::OnlinePvP(local_mark) = self.mode else {
+            return None;
+        };
+        if self.board.state != GameState::Playing
+            || self.turn != 0
+            || self.active_player != local_mark
+        {
+            return None;
+        }
+
+        let starting_mark = local_mark.switch();
+        self.start_online_round(starting_mark);
+        Some(starting_mark)
+    }
+
+    pub fn apply_remote_new_round(&mut self, starting_mark: Mark) -> bool {
+        let GameMode::OnlinePvP(local_mark) = self.mode else {
+            return false;
+        };
+        let remote_mark = local_mark.switch();
+        let is_reset = self.board.state != GameState::Playing && starting_mark == remote_mark;
+        let is_yield = self.board.state == GameState::Playing
+            && self.turn == 0
+            && self.active_player == remote_mark
+            && starting_mark == local_mark;
+        if !is_reset && !is_yield {
+            return false;
+        }
+
+        self.start_online_round(starting_mark);
+        true
+    }
+
+    fn start_online_round(&mut self, starting_mark: Mark) {
+        self.board = SmallBoard::new();
+        self.active_player = starting_mark;
+        self.turn = 0;
+        self.selected = Position { row: 0, col: 0 };
+    }
+
     fn apply_move(&mut self, row: usize, col: usize) {
         self.board.make_move(row, col, self.active_player);
         self.turn += 1;
@@ -583,6 +636,43 @@ mod tests {
         assert!(!game.play_remote_move(1, 1));
         assert!(!game.play_remote_move(3, 0));
         assert_eq!(game.turn, 2);
+    }
+
+    #[test]
+    fn test_online_reset_starts_with_requesting_player() {
+        let mut game = GamePlayTTT::new(GameMode::OnlinePvP(Mark::O));
+        game.board.set(0, 0, Some(Mark::X));
+        game.board.state = GameState::Won(Mark::X);
+        game.turn = 5;
+
+        assert_eq!(game.request_online_reset(), Some(Mark::O));
+        assert_eq!(game.board.state, GameState::Playing);
+        assert_eq!(game.active_player, Mark::O);
+        assert_eq!(game.turn, 0);
+        assert!(game.board.get(0, 0).is_none());
+    }
+
+    #[test]
+    fn test_online_starting_player_can_yield_first_move() {
+        let mut game = GamePlayTTT::new(GameMode::OnlinePvP(Mark::X));
+
+        assert_eq!(game.yield_online_first_move(), Some(Mark::O));
+        assert_eq!(game.active_player, Mark::O);
+        assert_eq!(game.turn, 0);
+        assert_eq!(game.yield_online_first_move(), None);
+    }
+
+    #[test]
+    fn test_remote_new_round_must_match_a_legal_remote_action() {
+        let mut game = GamePlayTTT::new(GameMode::OnlinePvP(Mark::O));
+
+        assert!(game.apply_remote_new_round(Mark::O));
+        assert_eq!(game.active_player, Mark::O);
+        assert!(!game.apply_remote_new_round(Mark::X));
+
+        game.board.state = GameState::Won(Mark::O);
+        assert!(game.apply_remote_new_round(Mark::X));
+        assert_eq!(game.active_player, Mark::X);
     }
 
     #[test]

@@ -93,11 +93,18 @@ impl fmt::Display for InvalidMoveCoordinates {
 
 impl std::error::Error for InvalidMoveCoordinates {}
 
-pub fn encode_move(message: &MoveMessage) -> Result<Vec<u8>, serde_json::Error> {
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum GameMessage {
+    Move { position: MoveMessage },
+    NewRound { starting_mark: Mark },
+}
+
+pub fn encode_game_message(message: &GameMessage) -> Result<Vec<u8>, serde_json::Error> {
     serde_json::to_vec(message)
 }
 
-pub fn decode_move(bytes: &[u8]) -> Result<MoveMessage, serde_json::Error> {
+pub fn decode_game_message(bytes: &[u8]) -> Result<GameMessage, serde_json::Error> {
     serde_json::from_slice(bytes)
 }
 
@@ -129,18 +136,30 @@ mod tests {
     fn move_round_trips_with_valid_coordinates() {
         let message = MoveMessage::new(2, 1).unwrap();
 
-        let encoded = encode_move(&message).unwrap();
-        let decoded = decode_move(&encoded).unwrap();
+        let game_message = GameMessage::Move { position: message };
+        let encoded = encode_game_message(&game_message).unwrap();
+        let decoded = decode_game_message(&encoded).unwrap();
 
-        assert_eq!(decoded.row(), 2);
-        assert_eq!(decoded.col(), 1);
+        assert_eq!(decoded, game_message);
     }
 
     #[test]
     fn move_outside_board_is_rejected_while_decoding() {
-        let result = decode_move(br#"{"row":3,"col":0}"#);
+        let result = decode_game_message(br#"{"type":"move","position":{"row":3,"col":0}}"#);
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn new_round_round_trips_with_starting_mark() {
+        let message = GameMessage::NewRound {
+            starting_mark: Mark::O,
+        };
+
+        let encoded = encode_game_message(&message).unwrap();
+        let decoded = decode_game_message(&encoded).unwrap();
+
+        assert_eq!(decoded, message);
     }
 
     #[test]

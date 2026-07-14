@@ -105,11 +105,29 @@ impl App {
                         NetworkStatus::Failed("received an invalid online move".to_string());
                 }
             }
+            NetworkEvent::NewRoundReceived { starting_mark } => {
+                let applied = match &mut self.current_scene {
+                    Scene::PlayingTTT(game) => game.apply_remote_new_round(starting_mark),
+                    _ => false,
+                };
+                if !applied {
+                    self.network_status =
+                        NetworkStatus::Failed("received an invalid new round".to_string());
+                }
+            }
             event => {
                 if let Some(status) = event.into_status() {
                     self.network_status = status;
                 }
             }
+        }
+    }
+
+    fn send_online_new_round(&mut self, starting_mark: Mark) {
+        if let Err(error) =
+            self.send_active_network_command(NetworkCommand::StartNewRound { starting_mark })
+        {
+            self.network_status = NetworkStatus::Failed(error.to_string());
         }
     }
 
@@ -436,19 +454,43 @@ impl App {
 
     /// Handles 's' key input to allow AI to play first in PvE mode.
     pub fn handle_second(&mut self) {
-        match &mut self.current_scene {
-            Scene::PlayingTTT(game) => game.play_second(),
-            Scene::PlayingUTT(game) => game.play_second(),
-            _ => {}
+        let starting_mark = match &mut self.current_scene {
+            Scene::PlayingTTT(game) if matches!(game.mode, GameMode::OnlinePvP(_)) => {
+                game.yield_online_first_move()
+            }
+            Scene::PlayingTTT(game) => {
+                game.play_second();
+                None
+            }
+            Scene::PlayingUTT(game) => {
+                game.play_second();
+                None
+            }
+            _ => None,
+        };
+        if let Some(starting_mark) = starting_mark {
+            self.send_online_new_round(starting_mark);
         }
     }
 
     /// Handles 'r' key input to reset the current game.
     pub fn handle_reset(&mut self) {
-        match &mut self.current_scene {
-            Scene::PlayingTTT(game) => game.reset_game(),
-            Scene::PlayingUTT(game) => game.reset_game(),
-            _ => {}
+        let starting_mark = match &mut self.current_scene {
+            Scene::PlayingTTT(game) if matches!(game.mode, GameMode::OnlinePvP(_)) => {
+                game.request_online_reset()
+            }
+            Scene::PlayingTTT(game) => {
+                game.reset_game();
+                None
+            }
+            Scene::PlayingUTT(game) => {
+                game.reset_game();
+                None
+            }
+            _ => None,
+        };
+        if let Some(starting_mark) = starting_mark {
+            self.send_online_new_round(starting_mark);
         }
     }
 
@@ -480,7 +522,7 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::game::{Board, Mark::X};
+    use crate::game::{Board, GameState, Mark::X};
 
     #[test]
     fn test_app_new_starts_at_menu() {
@@ -548,6 +590,40 @@ mod tests {
         };
         assert_eq!(game.board.get(1, 2), Some(X));
         assert_eq!(game.active_player, O);
+    }
+
+    #[test]
+    fn test_received_yield_gives_local_player_first_move() {
+        let mut app = App::new();
+        app.handle_network_event(NetworkEvent::Connected { mark: O });
+
+        app.handle_network_event(NetworkEvent::NewRoundReceived { starting_mark: O });
+
+        let Scene::PlayingTTT(game) = &app.current_scene else {
+            panic!("expected online tic tac toe game");
+        };
+        assert_eq!(game.active_player, O);
+        assert_eq!(game.turn, 0);
+    }
+
+    #[test]
+    fn test_received_reset_starts_with_remote_player() {
+        let mut app = App::new();
+        app.handle_network_event(NetworkEvent::Connected { mark: X });
+        let Scene::PlayingTTT(game) = &mut app.current_scene else {
+            panic!("expected online tic tac toe game");
+        };
+        game.board.state = GameState::Won(X);
+        game.turn = 5;
+
+        app.handle_network_event(NetworkEvent::NewRoundReceived { starting_mark: O });
+
+        let Scene::PlayingTTT(game) = &app.current_scene else {
+            panic!("expected online tic tac toe game");
+        };
+        assert_eq!(game.board.state, GameState::Playing);
+        assert_eq!(game.active_player, O);
+        assert_eq!(game.turn, 0);
     }
 
     #[test]

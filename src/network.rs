@@ -1,6 +1,6 @@
 pub mod protocol;
 
-use self::protocol::{HandshakeMessage, MoveMessage, PROTOCOL_VERSION};
+use self::protocol::{GameMessage, HandshakeMessage, MoveMessage, PROTOCOL_VERSION};
 use crate::game::Mark;
 use iroh::{
     Endpoint, EndpointAddr,
@@ -17,6 +17,7 @@ pub enum NetworkCommand {
     Host,
     Join(String),
     SendMove(MoveMessage),
+    StartNewRound { starting_mark: Mark },
     Disconnect,
 }
 
@@ -26,6 +27,7 @@ pub enum NetworkEvent {
     Connecting,
     Connected { mark: Mark },
     MoveReceived(MoveMessage),
+    NewRoundReceived { starting_mark: Mark },
     Disconnected,
     Failed(String),
 }
@@ -57,7 +59,7 @@ impl NetworkEvent {
             }),
             NetworkEvent::Connecting => Some(NetworkStatus::Connecting),
             NetworkEvent::Connected { mark } => Some(NetworkStatus::Connected { mark }),
-            NetworkEvent::MoveReceived(_) => None,
+            NetworkEvent::MoveReceived(_) | NetworkEvent::NewRoundReceived { .. } => None,
             NetworkEvent::Disconnected => Some(NetworkStatus::Idle),
             NetworkEvent::Failed(error) => Some(NetworkStatus::Failed(error)),
         }
@@ -179,16 +181,20 @@ async fn run_network_worker(
                 let Some(command) = command else { break };
                 match command {
                     NetworkCommand::SendMove(message) => {
-                        let result = match session.as_ref() {
-                            Some(session) => send_move(&session.connection, &message).await,
-                            None => Err("no active network session".to_string()),
-                        };
-                        if let Err(error) = result {
-                            if let Some(session) = session.take() {
-                                close_session(session).await;
-                            }
-                            let _ = event_tx.send(NetworkEvent::Failed(error));
-                        }
+                        send_worker_game_message(
+                            &mut session,
+                            &event_tx,
+                            GameMessage::Move { position: message },
+                        )
+                        .await;
+                    }
+                    NetworkCommand::StartNewRound { starting_mark } => {
+                        send_worker_game_message(
+                            &mut session,
+                            &event_tx,
+                            GameMessage::NewRound { starting_mark },
+                        )
+                        .await;
                     }
                     command => {
                         operation_id += 1;
@@ -221,7 +227,8 @@ async fn run_network_worker(
                             NetworkCommand::Disconnect => {
                                 let _ = event_tx.send(NetworkEvent::Disconnected);
                             }
-                            NetworkCommand::SendMove(_) => unreachable!(),
+                            NetworkCommand::SendMove(_)
+                            | NetworkCommand::StartNewRound { .. } => unreachable!(),
                         }
                     }
                 }
@@ -243,10 +250,13 @@ async fn run_network_worker(
                     }
                 }
             }
-            result = receive_session_move(move_connection) => {
+            result = receive_session_game_message(move_connection) => {
                 match result {
-                    Ok(message) => {
-                        let _ = event_tx.send(NetworkEvent::MoveReceived(message));
+                    Ok(GameMessage::Move { position }) => {
+                        let _ = event_tx.send(NetworkEvent::MoveReceived(position));
+                    }
+                    Ok(GameMessage::NewRound { starting_mark }) => {
+                        let _ = event_tx.send(NetworkEvent::NewRoundReceived { starting_mark });
                     }
                     Err(error) => {
                         if let Some(session) = session.take() {
@@ -267,9 +277,28 @@ async fn run_network_worker(
     }
 }
 
-async fn receive_session_move(connection: Option<Connection>) -> Result<MoveMessage, String> {
+async fn send_worker_game_message(
+    session: &mut Option<NetworkSession>,
+    event_tx: &mpsc::Sender<NetworkEvent>,
+    message: GameMessage,
+) {
+    let result = match session.as_ref() {
+        Some(session) => send_game_message(&session.connection, &message).await,
+        None => Err("no active network session".to_string()),
+    };
+    if let Err(error) = result {
+        if let Some(session) = session.take() {
+            close_session(session).await;
+        }
+        let _ = event_tx.send(NetworkEvent::Failed(error));
+    }
+}
+
+async fn receive_session_game_message(
+    connection: Option<Connection>,
+) -> Result<GameMessage, String> {
     match connection {
-        Some(connection) => receive_move(&connection).await,
+        Some(connection) => receive_game_message(&connection).await,
         None => std::future::pending().await,
     }
 }
@@ -334,7 +363,7 @@ async fn join_session(
 }
 
 const MAX_HANDSHAKE_SIZE: usize = 1024;
-const MAX_MOVE_SIZE: usize = 64;
+const MAX_GAME_MESSAGE_SIZE: usize = 64;
 
 async fn perform_host_handshake(connection: &Connection) -> Result<Mark, String> {
     let (mut send, mut receive) = connection
@@ -393,8 +422,11 @@ async fn perform_join_handshake(connection: &Connection) -> Result<Mark, String>
     }
 }
 
-pub async fn send_move(connection: &Connection, message: &MoveMessage) -> Result<(), String> {
-    let bytes = protocol::encode_move(message).map_err(|error| error.to_string())?;
+pub async fn send_game_message(
+    connection: &Connection,
+    message: &GameMessage,
+) -> Result<(), String> {
+    let bytes = protocol::encode_game_message(message).map_err(|error| error.to_string())?;
     let mut send = connection
         .open_uni()
         .await
@@ -405,16 +437,16 @@ pub async fn send_move(connection: &Connection, message: &MoveMessage) -> Result
     send.finish().map_err(|error| error.to_string())
 }
 
-pub async fn receive_move(connection: &Connection) -> Result<MoveMessage, String> {
+pub async fn receive_game_message(connection: &Connection) -> Result<GameMessage, String> {
     let mut receive = connection
         .accept_uni()
         .await
         .map_err(|error| error.to_string())?;
     let bytes = receive
-        .read_to_end(MAX_MOVE_SIZE)
+        .read_to_end(MAX_GAME_MESSAGE_SIZE)
         .await
         .map_err(|error| error.to_string())?;
-    protocol::decode_move(&bytes).map_err(|error| error.to_string())
+    protocol::decode_game_message(&bytes).map_err(|error| error.to_string())
 }
 
 #[cfg(test)]
@@ -422,7 +454,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_move_is_sent_over_connection() {
+    async fn test_game_message_is_sent_over_connection() {
         let host_endpoint = create_endpoint().await.unwrap();
         let joiner_endpoint = create_endpoint().await.unwrap();
         let host_addr = host_endpoint.addr();
@@ -431,11 +463,13 @@ mod tests {
             async { wait_for_connection(&host_endpoint).await.unwrap() },
             async { connect_to_host(&joiner_endpoint, host_addr).await.unwrap() }
         );
-        let message = MoveMessage::new(1, 2).unwrap();
+        let message = GameMessage::NewRound {
+            starting_mark: Mark::O,
+        };
 
         let (sent, received) = tokio::join!(
-            send_move(&joiner_connection, &message),
-            receive_move(&host_connection)
+            send_game_message(&joiner_connection, &message),
+            receive_game_message(&host_connection)
         );
 
         sent.unwrap();
@@ -559,6 +593,12 @@ mod tests {
         joiner.send(NetworkCommand::SendMove(message)).unwrap();
 
         assert_eq!(wait_for_received_move(&host), message);
+
+        host.send(NetworkCommand::StartNewRound {
+            starting_mark: Mark::X,
+        })
+        .unwrap();
+        assert_eq!(wait_for_new_round(&joiner), Mark::X);
     }
 
     fn wait_for_connected_mark(client: &NetworkClient) -> Mark {
@@ -585,6 +625,20 @@ mod tests {
                 NetworkEvent::MoveReceived(message) => return message,
                 NetworkEvent::Hosting { .. } => {}
                 event => panic!("expected move event, got {event:?}"),
+            }
+        }
+    }
+
+    fn wait_for_new_round(client: &NetworkClient) -> Mark {
+        loop {
+            match client
+                .event_rx
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .unwrap()
+            {
+                NetworkEvent::NewRoundReceived { starting_mark } => return starting_mark,
+                NetworkEvent::Hosting { .. } => {}
+                event => panic!("expected new-round event, got {event:?}"),
             }
         }
     }

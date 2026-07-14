@@ -371,7 +371,7 @@ fn render_ttt_board(f: &mut Frame, area: Rect, game: &GamePlayTTT) {
     let mut lines = vec![Line::from("")];
 
     // Add current player or game result
-    let (status, status_style) = game_status(game.board.state, game.active_player);
+    let (status, status_style) = ttt_game_status(game);
 
     let selection = match game.mode {
         GameMode::EvE(_, _) => None,
@@ -490,6 +490,10 @@ fn render_ttt_instructions(f: &mut Frame, area: Rect, game: &GamePlayTTT) {
                 "Waiting for opponent".to_string(),
                 "M: Main Menu | Q: Quit".to_string(),
             ],
+            GameMode::OnlinePvP(_) if game.turn == 0 => vec![
+                "S: Let Opponent Move First | Arrow Keys: Move".to_string(),
+                "Enter: Place Mark | M: Main Menu | Q: Quit".to_string(),
+            ],
             GameMode::OnlinePvP(_) => vec![
                 "Arrow Keys: Move | Enter: Place Mark".to_string(),
                 "M: Main Menu | Q: Quit".to_string(),
@@ -526,6 +530,20 @@ fn render_ttt_instructions(f: &mut Frame, area: Rect, game: &GamePlayTTT) {
     };
 
     render_instructions(f, area, &instructions);
+}
+
+fn ttt_game_status(game: &GamePlayTTT) -> (String, Style) {
+    let (status, style) = game_status(game.board.state, game.active_player);
+    if game.board.state == GameState::Playing
+        && matches!(
+            game.mode,
+            GameMode::OnlinePvP(local_mark) if local_mark != game.active_player
+        )
+    {
+        (status, Style::default())
+    } else {
+        (status, style)
+    }
 }
 
 fn game_status(game_state: GameState, current_player: Mark) -> (String, Style) {
@@ -810,6 +828,18 @@ fn render_size_warning(f: &mut Frame, min_width: u16, min_height: u16) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_online_turn_status_uses_local_and_opponent_colors() {
+        let mut game = GamePlayTTT::new(GameMode::OnlinePvP(Mark::O));
+
+        let (_, opponent_style) = ttt_game_status(&game);
+        assert_eq!(opponent_style, Style::default());
+
+        game.active_player = Mark::O;
+        let (_, local_style) = ttt_game_status(&game);
+        assert_eq!(local_style.fg, Some(Color::LightYellow));
+    }
 
     #[test]
     fn test_format_ticket_lines_groups_ticket_for_copying() {
