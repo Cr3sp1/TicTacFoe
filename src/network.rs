@@ -1,3 +1,7 @@
+pub mod protocol;
+
+use self::protocol::{HandshakeMessage, PROTOCOL_VERSION};
+use crate::game::Mark;
 use iroh::{
     Endpoint, EndpointAddr,
     endpoint::{BindError, ConnectError, ConnectingError, Connection, presets},
@@ -19,7 +23,7 @@ pub enum NetworkCommand {
 pub enum NetworkEvent {
     Hosting { ticket: String, relay_ready: bool },
     Connecting,
-    Connected,
+    Connected { mark: Mark },
     Disconnected,
     Failed(String),
 }
@@ -33,7 +37,9 @@ pub enum NetworkStatus {
         relay_ready: bool,
     },
     Connecting,
-    Connected,
+    Connected {
+        mark: Mark,
+    },
     Failed(String),
 }
 
@@ -48,7 +54,7 @@ impl From<NetworkEvent> for NetworkStatus {
                 relay_ready,
             },
             NetworkEvent::Connecting => Self::Connecting,
-            NetworkEvent::Connected => Self::Connected,
+            NetworkEvent::Connected { mark } => Self::Connected { mark },
             NetworkEvent::Disconnected => Self::Idle,
             NetworkEvent::Failed(error) => Self::Failed(error),
         }
@@ -145,6 +151,7 @@ impl Drop for NetworkClient {
 struct NetworkSession {
     endpoint: Endpoint,
     connection: Connection,
+    mark: Mark,
 }
 
 struct OperationResult {
@@ -205,8 +212,9 @@ async fn run_network_worker(
                 pending = None;
                 match result {
                     Ok(new_session) => {
+                        let mark = new_session.mark;
                         session = Some(new_session);
-                        let _ = event_tx.send(NetworkEvent::Connected);
+                        let _ = event_tx.send(NetworkEvent::Connected { mark });
                     }
                     Err(error) => {
                         let _ = event_tx.send(NetworkEvent::Failed(error));
@@ -248,9 +256,12 @@ async fn host_session(event_tx: mpsc::Sender<NetworkEvent>) -> Result<NetworkSes
         }
     };
 
+    let mark = perform_host_handshake(&connection).await?;
+
     Ok(NetworkSession {
         endpoint,
         connection,
+        mark,
     })
 }
 
@@ -271,10 +282,72 @@ async fn join_session(
     let connection = connect_to_host(&endpoint, addr)
         .await
         .map_err(|error| error.to_string())?;
+    let mark = perform_join_handshake(&connection).await?;
+
     Ok(NetworkSession {
         endpoint,
         connection,
+        mark,
     })
+}
+
+const MAX_HANDSHAKE_SIZE: usize = 1024;
+
+async fn perform_host_handshake(connection: &Connection) -> Result<Mark, String> {
+    let (mut send, mut receive) = connection
+        .accept_bi()
+        .await
+        .map_err(|error| error.to_string())?;
+    let bytes = receive
+        .read_to_end(MAX_HANDSHAKE_SIZE)
+        .await
+        .map_err(|error| error.to_string())?;
+
+    match protocol::decode(&bytes).map_err(|error| error.to_string())? {
+        HandshakeMessage::Hello { protocol_version } if protocol_version == PROTOCOL_VERSION => {}
+        HandshakeMessage::Hello { protocol_version } => {
+            return Err(format!("unsupported protocol version: {protocol_version}"));
+        }
+        HandshakeMessage::Welcome { .. } => {
+            return Err("expected hello handshake message".to_string());
+        }
+    }
+
+    let response =
+        protocol::encode(&HandshakeMessage::welcome(Mark::O)).map_err(|error| error.to_string())?;
+    send.write_all(&response)
+        .await
+        .map_err(|error| error.to_string())?;
+    send.finish().map_err(|error| error.to_string())?;
+
+    Ok(Mark::X)
+}
+
+async fn perform_join_handshake(connection: &Connection) -> Result<Mark, String> {
+    let (mut send, mut receive) = connection
+        .open_bi()
+        .await
+        .map_err(|error| error.to_string())?;
+    let hello = protocol::encode(&HandshakeMessage::hello()).map_err(|error| error.to_string())?;
+    send.write_all(&hello)
+        .await
+        .map_err(|error| error.to_string())?;
+    send.finish().map_err(|error| error.to_string())?;
+
+    let bytes = receive
+        .read_to_end(MAX_HANDSHAKE_SIZE)
+        .await
+        .map_err(|error| error.to_string())?;
+    match protocol::decode(&bytes).map_err(|error| error.to_string())? {
+        HandshakeMessage::Welcome {
+            protocol_version,
+            mark,
+        } if protocol_version == PROTOCOL_VERSION => Ok(mark),
+        HandshakeMessage::Welcome {
+            protocol_version, ..
+        } => Err(format!("unsupported protocol version: {protocol_version}")),
+        HandshakeMessage::Hello { .. } => Err("expected welcome handshake message".to_string()),
+    }
 }
 
 #[cfg(test)]
@@ -336,6 +409,47 @@ mod tests {
             .recv_timeout(std::time::Duration::from_secs(1))
             .unwrap();
         assert!(matches!(failed, NetworkEvent::Failed(error) if !error.is_empty()));
+    }
+
+    #[test]
+    fn test_workers_complete_handshake_with_opposite_marks() {
+        let host = NetworkClient::start().unwrap();
+        let joiner = NetworkClient::start().unwrap();
+
+        host.send(NetworkCommand::Host).unwrap();
+        let NetworkEvent::Hosting { ticket, .. } = host
+            .event_rx
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .unwrap()
+        else {
+            panic!("expected hosting event");
+        };
+
+        joiner.send(NetworkCommand::Join(ticket)).unwrap();
+        assert_eq!(
+            joiner
+                .event_rx
+                .recv_timeout(std::time::Duration::from_secs(2))
+                .unwrap(),
+            NetworkEvent::Connecting
+        );
+
+        assert_eq!(wait_for_connected_mark(&host), Mark::X);
+        assert_eq!(wait_for_connected_mark(&joiner), Mark::O);
+    }
+
+    fn wait_for_connected_mark(client: &NetworkClient) -> Mark {
+        loop {
+            match client
+                .event_rx
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .unwrap()
+            {
+                NetworkEvent::Connected { mark } => return mark,
+                NetworkEvent::Hosting { .. } => {}
+                event => panic!("expected connected event, got {event:?}"),
+            }
+        }
     }
 
     #[test]

@@ -92,7 +92,7 @@ fn render_hosting_ttt(f: &mut Frame, status: &NetworkStatus) {
                 .add_modifier(Modifier::BOLD),
         ),
         NetworkStatus::Connecting => ("Connecting...", Style::default().fg(Color::Yellow)),
-        NetworkStatus::Connected => (
+        NetworkStatus::Connected { .. } => (
             "Opponent connected",
             Style::default()
                 .fg(Color::Green)
@@ -181,7 +181,7 @@ fn render_joining_ttt(f: &mut Frame, input: &TicketInput, status: &NetworkStatus
     let (message, style) = match status {
         NetworkStatus::Idle => ("Enter host ticket", Style::default().fg(Color::LightYellow)),
         NetworkStatus::Connecting => ("Connecting...", Style::default().fg(Color::Yellow)),
-        NetworkStatus::Connected => (
+        NetworkStatus::Connected { .. } => (
             "Connected",
             Style::default()
                 .fg(Color::Green)

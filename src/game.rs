@@ -3,8 +3,10 @@ pub mod ultimate;
 
 use std::fmt;
 
+use serde::{Deserialize, Serialize};
+
 /// Represents a player's mark (X or O) on the tic-tac-toe board.
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub enum Mark {
     X,
     O,
