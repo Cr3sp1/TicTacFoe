@@ -1,6 +1,8 @@
 pub mod protocol;
 
-use self::protocol::{GameMessage, GameVariant, HandshakeMessage, MoveMessage, PROTOCOL_VERSION};
+use self::protocol::{
+    GameMessage, GameVariant, HandshakeMessage, MoveMessage, PROTOCOL_VERSION, UltimateMoveMessage,
+};
 use crate::game::Mark;
 use iroh::{
     Endpoint, EndpointAddr,
@@ -17,6 +19,7 @@ pub enum NetworkCommand {
     Host(GameVariant),
     Join { ticket: String, game: GameVariant },
     SendMove(MoveMessage),
+    SendUltimateMove(UltimateMoveMessage),
     SendRematchReady,
     YieldFirstMove,
     Concede,
@@ -29,6 +32,7 @@ pub enum NetworkEvent {
     Connecting,
     Connected { mark: Mark, game: GameVariant },
     MoveReceived(MoveMessage),
+    UltimateMoveReceived(UltimateMoveMessage),
     RematchReadyReceived,
     YieldFirstMoveReceived,
     OpponentConceded,
@@ -66,6 +70,7 @@ impl NetworkEvent {
             NetworkEvent::Connecting => Some(NetworkStatus::Connecting),
             NetworkEvent::Connected { mark, .. } => Some(NetworkStatus::Connected { mark }),
             NetworkEvent::MoveReceived(_)
+            | NetworkEvent::UltimateMoveReceived(_)
             | NetworkEvent::RematchReadyReceived
             | NetworkEvent::YieldFirstMoveReceived
             | NetworkEvent::OpponentConceded => None,
@@ -191,6 +196,14 @@ async fn run_network_worker(
             command = command_rx.recv() => {
                 let Some(command) = command else { break };
                 match command {
+                    NetworkCommand::SendUltimateMove(message) => {
+                        send_worker_game_message(
+                            &mut session,
+                            &event_tx,
+                            GameMessage::UltimateMove { position: message },
+                        )
+                        .await;
+                    }
                     NetworkCommand::SendMove(message) => {
                         send_worker_game_message(
                             &mut session,
@@ -255,6 +268,7 @@ async fn run_network_worker(
                                 let _ = event_tx.send(NetworkEvent::Disconnected);
                             }
                             NetworkCommand::SendMove(_)
+                            | NetworkCommand::SendUltimateMove(_)
                             | NetworkCommand::SendRematchReady
                             | NetworkCommand::YieldFirstMove
                             | NetworkCommand::Concede => unreachable!(),
@@ -284,6 +298,9 @@ async fn run_network_worker(
                 match result {
                     Ok(GameMessage::Move { position }) => {
                         let _ = event_tx.send(NetworkEvent::MoveReceived(position));
+                    }
+                    Ok(GameMessage::UltimateMove { position }) => {
+                        let _ = event_tx.send(NetworkEvent::UltimateMoveReceived(position));
                     }
                     Ok(GameMessage::RematchReady) => {
                         let _ = event_tx.send(NetworkEvent::RematchReadyReceived);
@@ -411,7 +428,7 @@ async fn join_session(
 }
 
 const MAX_HANDSHAKE_SIZE: usize = 1024;
-const MAX_GAME_MESSAGE_SIZE: usize = 64;
+const MAX_GAME_MESSAGE_SIZE: usize = 128;
 
 async fn perform_host_handshake(
     connection: &Connection,
@@ -668,6 +685,49 @@ mod tests {
 
         assert_eq!(wait_for_connected_mark(&host), Mark::X);
         assert_eq!(wait_for_connected_mark(&joiner), Mark::O);
+    }
+
+    #[test]
+    fn test_workers_exchange_ultimate_move() {
+        let host = NetworkClient::start().unwrap();
+        let joiner = NetworkClient::start().unwrap();
+
+        host.send(NetworkCommand::Host(GameVariant::Ultimate))
+            .unwrap();
+        let NetworkEvent::Hosting { ticket, .. } = host
+            .event_rx
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .unwrap()
+        else {
+            panic!("expected hosting event");
+        };
+        joiner
+            .send(NetworkCommand::Join {
+                ticket,
+                game: GameVariant::Ultimate,
+            })
+            .unwrap();
+        assert_eq!(
+            joiner
+                .event_rx
+                .recv_timeout(std::time::Duration::from_secs(2))
+                .unwrap(),
+            NetworkEvent::Connecting
+        );
+        wait_for_connected_mark(&host);
+        wait_for_connected_mark(&joiner);
+
+        let position = UltimateMoveMessage::new(2, 1, 0, 2).unwrap();
+        joiner
+            .send(NetworkCommand::SendUltimateMove(position))
+            .unwrap();
+
+        assert_eq!(
+            host.event_rx
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .unwrap(),
+            NetworkEvent::UltimateMoveReceived(position)
+        );
     }
 
     #[test]

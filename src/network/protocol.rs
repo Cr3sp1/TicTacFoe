@@ -110,9 +110,98 @@ impl fmt::Display for InvalidMoveCoordinates {
 impl std::error::Error for InvalidMoveCoordinates {}
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(try_from = "UltimateMoveCoordinates")]
+pub struct UltimateMoveMessage {
+    board_row: u8,
+    board_col: u8,
+    cell_row: u8,
+    cell_col: u8,
+}
+
+impl UltimateMoveMessage {
+    pub fn new(
+        board_row: u8,
+        board_col: u8,
+        cell_row: u8,
+        cell_col: u8,
+    ) -> Result<Self, InvalidUltimateMoveCoordinates> {
+        if board_row < 3 && board_col < 3 && cell_row < 3 && cell_col < 3 {
+            Ok(Self {
+                board_row,
+                board_col,
+                cell_row,
+                cell_col,
+            })
+        } else {
+            Err(InvalidUltimateMoveCoordinates {
+                board_row,
+                board_col,
+                cell_row,
+                cell_col,
+            })
+        }
+    }
+
+    pub fn board_row(self) -> usize {
+        self.board_row.into()
+    }
+    pub fn board_col(self) -> usize {
+        self.board_col.into()
+    }
+    pub fn cell_row(self) -> usize {
+        self.cell_row.into()
+    }
+    pub fn cell_col(self) -> usize {
+        self.cell_col.into()
+    }
+}
+
+#[derive(Deserialize)]
+struct UltimateMoveCoordinates {
+    board_row: u8,
+    board_col: u8,
+    cell_row: u8,
+    cell_col: u8,
+}
+
+impl TryFrom<UltimateMoveCoordinates> for UltimateMoveMessage {
+    type Error = InvalidUltimateMoveCoordinates;
+
+    fn try_from(coordinates: UltimateMoveCoordinates) -> Result<Self, Self::Error> {
+        Self::new(
+            coordinates.board_row,
+            coordinates.board_col,
+            coordinates.cell_row,
+            coordinates.cell_col,
+        )
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct InvalidUltimateMoveCoordinates {
+    board_row: u8,
+    board_col: u8,
+    cell_row: u8,
+    cell_col: u8,
+}
+
+impl fmt::Display for InvalidUltimateMoveCoordinates {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "ultimate move coordinates ({}, {}, {}, {}) are outside the board",
+            self.board_row, self.board_col, self.cell_row, self.cell_col
+        )
+    }
+}
+
+impl std::error::Error for InvalidUltimateMoveCoordinates {}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum GameMessage {
     Move { position: MoveMessage },
+    UltimateMove { position: UltimateMoveMessage },
     RematchReady,
     YieldFirstMove,
     Concede,
@@ -164,6 +253,30 @@ mod tests {
     #[test]
     fn move_outside_board_is_rejected_while_decoding() {
         let result = decode_game_message(br#"{"type":"move","position":{"row":3,"col":0}}"#);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn ultimate_move_round_trips_with_valid_coordinates() {
+        let position = UltimateMoveMessage::new(2, 1, 0, 2).unwrap();
+        let message = GameMessage::UltimateMove { position };
+
+        let encoded = encode_game_message(&message).unwrap();
+        let decoded = decode_game_message(&encoded).unwrap();
+
+        assert_eq!(decoded, message);
+        assert_eq!(position.board_row(), 2);
+        assert_eq!(position.board_col(), 1);
+        assert_eq!(position.cell_row(), 0);
+        assert_eq!(position.cell_col(), 2);
+    }
+
+    #[test]
+    fn ultimate_move_outside_board_is_rejected_while_decoding() {
+        let result = decode_game_message(
+            br#"{"type":"ultimate_move","position":{"board_row":1,"board_col":0,"cell_row":3,"cell_col":2}}"#,
+        );
 
         assert!(result.is_err());
     }
