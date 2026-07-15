@@ -10,6 +10,7 @@ use rand::prelude::*;
 /// 3. Choose randomly from available positions
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SimpleAi {
+    /// Mark controlled by the AI.
     pub ai_mark: Mark,
     enemy_mark: Mark,
 }

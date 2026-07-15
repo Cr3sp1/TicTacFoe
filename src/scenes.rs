@@ -1,3 +1,5 @@
+//! Menu, input, and gameplay state for each application scene.
+
 use crate::ai::{AI, Game};
 use crate::game::base::SmallBoard;
 use crate::game::ultimate::BigBoard;
@@ -7,30 +9,45 @@ use crate::utils::{
     move_selection_right_playable, move_selection_up_playable, reset_position,
 };
 
+/// Options displayed by the top-level game-selection menu.
 pub const MAIN_MENU_OPTIONS: [&'static str; 3] = ["Ultimate Tic Tac Toe", "Tic Tac Toe", "Quit"];
+/// Modes available for classic tic-tac-toe.
 pub const TTT_MENU_OPTIONS: [&'static str; 5] =
     ["Online PvP", "Local PvP", "Play vs AI", "AI vs AI", "Back"];
+/// Modes available for Ultimate tic-tac-toe.
 pub const UTT_MENU_OPTIONS: [&'static str; 5] =
     ["Online PvP", "Local PvP", "Play vs AI", "AI vs AI", "Back"];
+/// AI strengths available from AI-selection menus.
 pub const AI_MENU_OPTIONS: [&'static str; 4] = ["Weak", "Medium", "Strong", "Back"];
+/// Actions available while setting up an online match.
 pub const ONLINE_MENU_OPTIONS: [&'static str; 3] = ["Host Match", "Join Match", "Back"];
 
 /// Represents all the possible scenes.
 pub enum Scene {
+    /// Top-level game-selection menu.
     MainMenu(Menu),
+    /// Classic tic-tac-toe mode menu.
     TTTMenu(Menu),
+    /// Online setup menu for the selected game variant.
     OnlineMenu(Menu, GameVariant),
+    /// Host screen displaying a shareable endpoint ticket.
     HostingOnline(GameVariant),
+    /// Join screen accepting an endpoint ticket.
     JoiningOnline(TicketInput, GameVariant),
+    /// Ultimate tic-tac-toe mode menu.
     UTTMenu(Menu),
+    /// AI strength menu and its originating context.
     AIMenu(Menu, AIMenuStatus),
+    /// Active classic tic-tac-toe game.
     PlayingTTT(GamePlayTTT),
+    /// Active Ultimate tic-tac-toe game.
     PlayingUTT(GamePlayUTT),
 }
 
 /// Editable iroh ticket text used by the join screen.
 #[derive(Default)]
 pub struct TicketInput {
+    /// Normalized ticket text without formatting whitespace.
     pub value: String,
 }
 
@@ -47,25 +64,36 @@ impl TicketInput {
     }
 }
 
+/// Identifies which AI setup flow is active.
 pub enum AIMenuStatus {
+    /// Selecting an opponent for classic player-versus-AI mode.
     TTTpve,
+    /// Selecting an opponent for Ultimate player-versus-AI mode.
     UTTpve,
+    /// Selecting classic AI-versus-AI players, optionally after choosing X.
     TTTeve(Option<AI>),
+    /// Selecting Ultimate AI-versus-AI players, optionally after choosing X.
     UTTeve(Option<AI>),
 }
 
 /// Represents the game mode selection.
 #[derive(Debug, Clone, PartialEq)]
 pub enum GameMode {
+    /// A local player against an AI opponent.
     PvE(AI),
+    /// Two AI opponents playing automatically.
     EvE(AI, AI),
+    /// Two local players sharing one terminal.
     LocalPvP,
+    /// A peer-to-peer match storing the local player's mark.
     OnlinePvP(Mark),
 }
 
 /// Menu scene with selectable options.
 pub struct Menu {
+    /// Zero-based index of the selected menu option.
     pub selected_option: usize,
+    /// Ordered labels displayed by the menu.
     pub options: Vec<&'static str>,
 }
 
@@ -100,10 +128,15 @@ impl Menu {
 
 /// Main tic-tac-toe gameplay scene containing the board state and game logic.
 pub struct GamePlayTTT {
+    /// Current classic board state.
     pub board: SmallBoard,
+    /// Mark whose turn is currently active.
     pub active_player: Mark,
+    /// Number of moves played in the current round.
     pub turn: u32,
+    /// Player configuration used by the game.
     pub mode: GameMode,
+    /// Currently selected classic board position.
     pub selected: Position,
     starting_player: Mark,
     local_rematch_ready: bool,
@@ -180,6 +213,9 @@ impl GamePlayTTT {
         true
     }
 
+    /// Applies a valid move received from the remote player.
+    ///
+    /// Returns `false` when the move violates turn or board constraints.
     pub fn play_remote_move(&mut self, row: usize, col: usize) -> bool {
         let GameMode::OnlinePvP(local_mark) = self.mode else {
             return false;
@@ -198,6 +234,7 @@ impl GamePlayTTT {
         true
     }
 
+    /// Concedes an active online round and awards the opponent the win.
     pub fn concede_online(&mut self) -> bool {
         let GameMode::OnlinePvP(local_mark) = self.mode else {
             return false;
@@ -210,6 +247,7 @@ impl GamePlayTTT {
         true
     }
 
+    /// Applies a remote concession and awards the local player the win.
     pub fn apply_remote_concession(&mut self) -> bool {
         let GameMode::OnlinePvP(local_mark) = self.mode else {
             return false;
@@ -222,6 +260,7 @@ impl GamePlayTTT {
         true
     }
 
+    /// Marks the local player as ready and starts the rematch when both are ready.
     pub fn request_online_rematch(&mut self) -> bool {
         if !matches!(self.mode, GameMode::OnlinePvP(_))
             || self.board.state == GameState::Playing
@@ -235,6 +274,7 @@ impl GamePlayTTT {
         true
     }
 
+    /// Records remote rematch readiness and starts when both players are ready.
     pub fn receive_remote_rematch_ready(&mut self) -> bool {
         if !matches!(self.mode, GameMode::OnlinePvP(_)) || self.board.state == GameState::Playing {
             return false;
@@ -248,6 +288,7 @@ impl GamePlayTTT {
         true
     }
 
+    /// Gives the first move of an untouched online round to the opponent.
     pub fn yield_online_first_move(&mut self) -> bool {
         let GameMode::OnlinePvP(local_mark) = self.mode else {
             return false;
@@ -263,6 +304,7 @@ impl GamePlayTTT {
         true
     }
 
+    /// Gives the local player first move after a remote yield.
     pub fn apply_remote_yield_first_move(&mut self) -> bool {
         let GameMode::OnlinePvP(local_mark) = self.mode else {
             return false;
@@ -278,6 +320,7 @@ impl GamePlayTTT {
         true
     }
 
+    /// Returns whether the local player is waiting for remote rematch readiness.
     pub fn waiting_for_rematch(&self) -> bool {
         self.local_rematch_ready
     }
@@ -372,11 +415,17 @@ impl GamePlayTTT {
 
 /// Main tic-tac-toe gameplay scene containing the board state and game logic.
 pub struct GamePlayUTT {
+    /// Current Ultimate board state.
     pub big_board: BigBoard,
+    /// Mark whose turn is currently active.
     pub active_player: Mark,
+    /// Number of moves played in the current round.
     pub turn: u32,
+    /// Player configuration used by the game.
     pub mode: GameMode,
+    /// Currently selected small board.
     pub selected_board: Position,
+    /// Selected cell, or `None` while choosing a small board.
     pub selected_cell: Option<Position>,
     starting_player: Mark,
     local_rematch_ready: bool,
@@ -504,6 +553,9 @@ impl GamePlayUTT {
         true
     }
 
+    /// Applies a valid move received from the remote player.
+    ///
+    /// Returns `false` when the move violates turn or board constraints.
     pub fn play_remote_move(
         &mut self,
         board_row: usize,
@@ -544,6 +596,7 @@ impl GamePlayUTT {
         self.active_player = self.active_player.switch();
     }
 
+    /// Concedes an active online round and awards the opponent the win.
     pub fn concede_online(&mut self) -> bool {
         let GameMode::OnlinePvP(local_mark) = self.mode else {
             return false;
@@ -556,6 +609,7 @@ impl GamePlayUTT {
         true
     }
 
+    /// Applies a remote concession and awards the local player the win.
     pub fn apply_remote_concession(&mut self) -> bool {
         let GameMode::OnlinePvP(local_mark) = self.mode else {
             return false;
@@ -568,6 +622,7 @@ impl GamePlayUTT {
         true
     }
 
+    /// Marks the local player as ready and starts the rematch when both are ready.
     pub fn request_online_rematch(&mut self) -> bool {
         if !matches!(self.mode, GameMode::OnlinePvP(_))
             || self.big_board.state == GameState::Playing
@@ -581,6 +636,7 @@ impl GamePlayUTT {
         true
     }
 
+    /// Records remote rematch readiness and starts when both players are ready.
     pub fn receive_remote_rematch_ready(&mut self) -> bool {
         if !matches!(self.mode, GameMode::OnlinePvP(_))
             || self.big_board.state == GameState::Playing
@@ -596,6 +652,7 @@ impl GamePlayUTT {
         true
     }
 
+    /// Gives the first move of an untouched online round to the opponent.
     pub fn yield_online_first_move(&mut self) -> bool {
         let GameMode::OnlinePvP(local_mark) = self.mode else {
             return false;
@@ -611,6 +668,7 @@ impl GamePlayUTT {
         true
     }
 
+    /// Gives the local player first move after a remote yield.
     pub fn apply_remote_yield_first_move(&mut self) -> bool {
         let GameMode::OnlinePvP(local_mark) = self.mode else {
             return false;
@@ -626,6 +684,7 @@ impl GamePlayUTT {
         true
     }
 
+    /// Returns whether the local player is waiting for remote rematch readiness.
     pub fn waiting_for_rematch(&self) -> bool {
         self.local_rematch_ready
     }

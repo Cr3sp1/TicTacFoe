@@ -1,8 +1,11 @@
 use crate::game::Board;
 
+/// Row and column of a selection within a 3x3 grid.
 #[derive(Clone, Copy, Debug)]
 pub struct Position {
+    /// Zero-based row index.
     pub row: usize,
+    /// Zero-based column index.
     pub col: usize,
 }
 

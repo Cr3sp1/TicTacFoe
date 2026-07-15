@@ -43,7 +43,7 @@ where
 
     /// Chooses the best move for the current `board` state.
     ///
-    /// Runs [`N_ROUNDS`] of selection → simulation → back-propagation, then
+    /// Runs `N_ROUNDS` of selection → simulation → back-propagation, then
     /// returns the child move with the highest estimated winning chance.
     /// The tree root is advanced to the chosen child for future reuse.
     ///

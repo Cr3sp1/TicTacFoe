@@ -1,29 +1,43 @@
+//! Serializable handshake and in-match messages used by the peer protocol.
+
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
 use crate::game::{GameVariant, Mark};
 
+/// Version required from both peers during the handshake.
 pub const PROTOCOL_VERSION: u16 = 1;
 
+/// Messages exchanged while peers negotiate a match.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum HandshakeMessage {
+    /// Initial request sent by the joining peer.
     Hello {
+        /// Protocol version supported by the joiner.
         protocol_version: u16,
+        /// Game variant requested by the joiner.
         game: GameVariant,
     },
+    /// Acceptance sent by the host with the joiner's assigned mark.
     Welcome {
+        /// Protocol version selected by the host.
         protocol_version: u16,
+        /// Mark assigned to the joining peer.
         mark: Mark,
+        /// Game variant accepted by the host.
         game: GameVariant,
     },
+    /// Rejection sent by the host before closing the connection.
     Rejected {
+        /// Human-readable reason for rejecting the handshake.
         reason: String,
     },
 }
 
 impl HandshakeMessage {
+    /// Creates a hello message for the requested game variant.
     pub fn hello(game: GameVariant) -> Self {
         Self::Hello {
             protocol_version: PROTOCOL_VERSION,
@@ -31,6 +45,7 @@ impl HandshakeMessage {
         }
     }
 
+    /// Creates a welcome message assigning a mark and game variant.
     pub fn welcome(mark: Mark, game: GameVariant) -> Self {
         Self::Welcome {
             protocol_version: PROTOCOL_VERSION,
@@ -39,6 +54,7 @@ impl HandshakeMessage {
         }
     }
 
+    /// Creates a handshake rejection with a human-readable reason.
     pub fn rejected(reason: impl Into<String>) -> Self {
         Self::Rejected {
             reason: reason.into(),
@@ -46,14 +62,17 @@ impl HandshakeMessage {
     }
 }
 
+/// Serializes a handshake message as JSON.
 pub fn encode(message: &HandshakeMessage) -> Result<Vec<u8>, serde_json::Error> {
     serde_json::to_vec(message)
 }
 
+/// Deserializes and validates a handshake message from JSON.
 pub fn decode(bytes: &[u8]) -> Result<HandshakeMessage, serde_json::Error> {
     serde_json::from_slice(bytes)
 }
 
+/// Validated coordinates for a classic tic-tac-toe move.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(try_from = "MoveCoordinates")]
 pub struct MoveMessage {
@@ -62,6 +81,7 @@ pub struct MoveMessage {
 }
 
 impl MoveMessage {
+    /// Creates a move when both coordinates are within a 3x3 board.
     pub fn new(row: u8, col: u8) -> Result<Self, InvalidMoveCoordinates> {
         if row < 3 && col < 3 {
             Ok(Self { row, col })
@@ -70,10 +90,12 @@ impl MoveMessage {
         }
     }
 
+    /// Returns the zero-based row.
     pub fn row(self) -> usize {
         self.row.into()
     }
 
+    /// Returns the zero-based column.
     pub fn col(self) -> usize {
         self.col.into()
     }
@@ -93,6 +115,7 @@ impl TryFrom<MoveCoordinates> for MoveMessage {
     }
 }
 
+/// Error returned when classic move coordinates are outside a 3x3 board.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct InvalidMoveCoordinates {
     row: u8,
@@ -111,6 +134,7 @@ impl fmt::Display for InvalidMoveCoordinates {
 
 impl std::error::Error for InvalidMoveCoordinates {}
 
+/// Validated board and cell coordinates for an Ultimate move.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(try_from = "UltimateMoveCoordinates")]
 pub struct UltimateMoveMessage {
@@ -121,6 +145,7 @@ pub struct UltimateMoveMessage {
 }
 
 impl UltimateMoveMessage {
+    /// Creates a move when all board and cell coordinates are within 3x3 grids.
     pub fn new(
         board_row: u8,
         board_col: u8,
@@ -144,15 +169,19 @@ impl UltimateMoveMessage {
         }
     }
 
+    /// Returns the zero-based small-board row.
     pub fn board_row(self) -> usize {
         self.board_row.into()
     }
+    /// Returns the zero-based small-board column.
     pub fn board_col(self) -> usize {
         self.board_col.into()
     }
+    /// Returns the zero-based cell row within the small board.
     pub fn cell_row(self) -> usize {
         self.cell_row.into()
     }
+    /// Returns the zero-based cell column within the small board.
     pub fn cell_col(self) -> usize {
         self.cell_col.into()
     }
@@ -179,6 +208,7 @@ impl TryFrom<UltimateMoveCoordinates> for UltimateMoveMessage {
     }
 }
 
+/// Error returned when any Ultimate move coordinate is outside its 3x3 grid.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct InvalidUltimateMoveCoordinates {
     board_row: u8,
@@ -199,20 +229,34 @@ impl fmt::Display for InvalidUltimateMoveCoordinates {
 
 impl std::error::Error for InvalidUltimateMoveCoordinates {}
 
+/// Messages exchanged during an active match.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum GameMessage {
-    Move { position: MoveMessage },
-    UltimateMove { position: UltimateMoveMessage },
+    /// Places a mark in a classic game.
+    Move {
+        /// Validated classic board position.
+        position: MoveMessage,
+    },
+    /// Places a mark in an Ultimate game.
+    UltimateMove {
+        /// Validated Ultimate board and cell position.
+        position: UltimateMoveMessage,
+    },
+    /// Announces readiness to begin a rematch.
     RematchReady,
+    /// Gives the remote player the first move.
     YieldFirstMove,
+    /// Concedes the active match.
     Concede,
 }
 
+/// Serializes an in-match message as JSON.
 pub fn encode_game_message(message: &GameMessage) -> Result<Vec<u8>, serde_json::Error> {
     serde_json::to_vec(message)
 }
 
+/// Deserializes and validates an in-match message from JSON.
 pub fn decode_game_message(bytes: &[u8]) -> Result<GameMessage, serde_json::Error> {
     serde_json::from_slice(bytes)
 }

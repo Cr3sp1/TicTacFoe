@@ -18,8 +18,11 @@ use crate::scenes::{
 /// Handles screen transitions and delegates input events to the
 /// appropriate screen handlers.
 pub struct App {
+    /// Scene currently displayed by the application.
     pub current_scene: Scene,
+    /// User-visible state of the online subsystem.
     pub network_status: NetworkStatus,
+    /// Whether the application event loop should terminate.
     pub should_quit: bool,
     network_client: Option<NetworkClient>,
 }

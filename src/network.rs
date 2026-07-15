@@ -1,3 +1,10 @@
+//! Peer-to-peer transport and synchronous application bridge.
+//!
+//! [`NetworkClient`](crate::network::NetworkClient) owns a Tokio runtime on a dedicated worker thread. The
+//! synchronous TUI sends [`NetworkCommand`](crate::network::NetworkCommand) values and polls [`NetworkEvent`](crate::network::NetworkEvent)
+//! values without blocking its render loop.
+
+/// Serializable messages exchanged during handshakes and matches.
 pub mod protocol;
 
 use self::protocol::{
@@ -12,52 +19,102 @@ use iroh_tickets::{ParseError, endpoint::EndpointTicket};
 use std::{fmt, io, sync::mpsc, thread};
 use tokio::{runtime::Builder, sync::mpsc as tokio_mpsc, task::JoinHandle};
 
+/// Application-layer protocol negotiated by iroh connections.
 pub const ALPN: &[u8] = b"/tic-tac-foe/1";
 
+/// Commands sent from the synchronous application to the network worker.
 #[derive(Clone, Debug, PartialEq)]
 pub enum NetworkCommand {
+    /// Hosts a match using the selected game variant.
     Host(GameVariant),
-    Join { ticket: String, game: GameVariant },
+    /// Joins a match using an endpoint ticket and expected game variant.
+    Join {
+        /// Encoded iroh endpoint ticket supplied by the host.
+        ticket: String,
+        /// Game variant expected during the handshake.
+        game: GameVariant,
+    },
+    /// Sends a classic tic-tac-toe move.
     SendMove(MoveMessage),
+    /// Sends an Ultimate tic-tac-toe move.
     SendUltimateMove(UltimateMoveMessage),
+    /// Marks the local player as ready for a rematch.
     SendRematchReady,
+    /// Gives the first move to the remote player.
     YieldFirstMove,
+    /// Concedes the active match.
     Concede,
+    /// Closes the active session.
     Disconnect,
 }
 
+/// Events emitted by the network worker for the synchronous application.
 #[derive(Clone, Debug, PartialEq)]
 pub enum NetworkEvent {
-    Hosting { ticket: String, relay_ready: bool },
+    /// Reports a host ticket and whether public relay connectivity is ready.
+    Hosting {
+        /// Encoded iroh endpoint ticket to share with the joining player.
+        ticket: String,
+        /// Whether relay connectivity is available in addition to LAN discovery.
+        relay_ready: bool,
+    },
+    /// Reports that a join attempt is in progress.
     Connecting,
-    Connected { mark: Mark, game: GameVariant },
+    /// Reports a completed handshake and assigned player mark.
+    Connected {
+        /// Mark assigned to the local player.
+        mark: Mark,
+        /// Game variant accepted by both peers.
+        game: GameVariant,
+    },
+    /// Delivers a validated classic move.
     MoveReceived(MoveMessage),
+    /// Delivers a validated Ultimate move.
     UltimateMoveReceived(UltimateMoveMessage),
+    /// Reports that the remote player requested a rematch.
     RematchReadyReceived,
+    /// Reports that the remote player yielded the first move.
     YieldFirstMoveReceived,
+    /// Reports that the remote player conceded.
     OpponentConceded,
+    /// Reports that the remote player unexpectedly left the match.
     OpponentDisconnected,
+    /// Confirms a locally requested disconnection.
     Disconnected,
+    /// Reports an operation or protocol failure.
     Failed(String),
 }
 
+/// User-visible summary of the current networking state.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub enum NetworkStatus {
+    /// No online operation is active.
     #[default]
     Idle,
+    /// A local endpoint is waiting for an opponent.
     Hosting {
+        /// Encoded endpoint ticket displayed to the user.
         ticket: String,
+        /// Whether public relay connectivity is ready.
         relay_ready: bool,
     },
+    /// The client is connecting to a host.
     Connecting,
+    /// A peer session is active.
     Connected {
+        /// Mark assigned to the local player.
         mark: Mark,
     },
+    /// The remote player left an active match.
     OpponentDisconnected,
+    /// The most recent network operation failed.
     Failed(String),
 }
 
 impl NetworkEvent {
+    /// Converts status-bearing events into their visible application state.
+    ///
+    /// Match actions return `None` because they update gameplay rather than status.
     pub fn into_status(self) -> Option<NetworkStatus> {
         match self {
             NetworkEvent::Hosting {
@@ -81,10 +138,12 @@ impl NetworkEvent {
     }
 }
 
+/// Encodes an iroh endpoint address as a shareable ticket.
 pub fn encode_ticket(addr: EndpointAddr) -> String {
     EndpointTicket::new(addr).to_string()
 }
 
+/// Decodes a ticket, ignoring whitespace introduced by UI formatting.
 pub fn decode_ticket(ticket: &str) -> Result<EndpointAddr, ParseError> {
     let ticket = ticket
         .chars()
@@ -94,6 +153,7 @@ pub fn decode_ticket(ticket: &str) -> Result<EndpointAddr, ParseError> {
     Ok(ticket.into())
 }
 
+/// Creates an iroh endpoint configured for the application protocol.
 pub async fn create_endpoint() -> Result<Endpoint, BindError> {
     Endpoint::builder(presets::N0)
         .alpns(vec![ALPN.to_vec()])
@@ -101,6 +161,7 @@ pub async fn create_endpoint() -> Result<Endpoint, BindError> {
         .await
 }
 
+/// Creates a host endpoint and returns its current shareable ticket.
 pub async fn create_host() -> Result<(Endpoint, String), BindError> {
     let endpoint = create_endpoint().await?;
 
@@ -109,6 +170,7 @@ pub async fn create_host() -> Result<(Endpoint, String), BindError> {
     Ok((endpoint, ticket))
 }
 
+/// Connects an endpoint to a remote address using the application protocol.
 pub async fn connect_to_host(
     endpoint: &Endpoint,
     addr: EndpointAddr,
@@ -116,6 +178,7 @@ pub async fn connect_to_host(
     endpoint.connect(addr, ALPN).await
 }
 
+/// Waits for the next incoming connection, or returns `None` if the endpoint closes.
 pub async fn accept_connection(endpoint: &Endpoint) -> Option<Result<Connection, ConnectingError>> {
     match endpoint.accept().await {
         Some(incoming) => Some(incoming.await),
@@ -123,6 +186,9 @@ pub async fn accept_connection(endpoint: &Endpoint) -> Option<Result<Connection,
     }
 }
 
+/// Synchronous handle to the asynchronous network worker.
+///
+/// The worker runs a current-thread Tokio runtime on a dedicated OS thread.
 pub struct NetworkClient {
     command_tx: Option<tokio_mpsc::UnboundedSender<NetworkCommand>>,
     event_rx: mpsc::Receiver<NetworkEvent>,
@@ -130,6 +196,7 @@ pub struct NetworkClient {
 }
 
 impl NetworkClient {
+    /// Starts the worker thread and its Tokio runtime.
     pub fn start() -> io::Result<Self> {
         let runtime = Builder::new_current_thread().enable_all().build()?;
         let (command_tx, command_rx) = tokio_mpsc::unbounded_channel();
@@ -144,6 +211,7 @@ impl NetworkClient {
         })
     }
 
+    /// Queues a command for the network worker.
     pub fn send(
         &self,
         command: NetworkCommand,
@@ -154,6 +222,7 @@ impl NetworkClient {
             .send(command)
     }
 
+    /// Returns the next pending worker event without blocking.
     pub fn try_recv(&self) -> Result<NetworkEvent, mpsc::TryRecvError> {
         self.event_rx.try_recv()
     }
@@ -535,6 +604,7 @@ async fn perform_join_handshake(
     }
 }
 
+/// Serializes and sends one game message on a unidirectional stream.
 pub async fn send_game_message(
     connection: &Connection,
     message: &GameMessage,
@@ -550,9 +620,12 @@ pub async fn send_game_message(
     send.finish().map_err(|error| error.to_string())
 }
 
+/// Failure encountered while receiving a game message.
 #[derive(Debug)]
 pub enum ReceiveGameMessageError {
+    /// The connection closed before another stream could be accepted.
     Disconnected(String),
+    /// A stream was received but its payload was invalid.
     InvalidMessage(String),
 }
 
@@ -566,6 +639,7 @@ impl fmt::Display for ReceiveGameMessageError {
 
 impl std::error::Error for ReceiveGameMessageError {}
 
+/// Receives and decodes one game message from a unidirectional stream.
 pub async fn receive_game_message(
     connection: &Connection,
 ) -> Result<GameMessage, ReceiveGameMessageError> {

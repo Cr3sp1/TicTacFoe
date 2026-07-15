@@ -1,3 +1,4 @@
+/// Marker type for the random move strategy.
 pub struct RandomAI {}
 use crate::ai::{Game, Move};
 use rand::prelude::*;
