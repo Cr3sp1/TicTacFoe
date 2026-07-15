@@ -66,6 +66,9 @@ where
                         KeyCode::Char('s') | KeyCode::Char('S') => {
                             app.handle_second();
                         }
+                        KeyCode::Char('c') | KeyCode::Char('C') => {
+                            app.handle_concede();
+                        }
                         KeyCode::Left | KeyCode::Char('h') => {
                             app.handle_left();
                         }

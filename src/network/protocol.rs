@@ -99,6 +99,7 @@ pub enum GameMessage {
     Move { position: MoveMessage },
     RematchReady,
     YieldFirstMove,
+    Concede,
 }
 
 pub fn encode_game_message(message: &GameMessage) -> Result<Vec<u8>, serde_json::Error> {
@@ -152,8 +153,12 @@ mod tests {
     }
 
     #[test]
-    fn rematch_and_yield_messages_round_trip() {
-        for message in [GameMessage::RematchReady, GameMessage::YieldFirstMove] {
+    fn game_actions_round_trip() {
+        for message in [
+            GameMessage::RematchReady,
+            GameMessage::YieldFirstMove,
+            GameMessage::Concede,
+        ] {
             let encoded = encode_game_message(&message).unwrap();
             let decoded = decode_game_message(&encoded).unwrap();
 

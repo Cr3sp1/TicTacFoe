@@ -125,6 +125,16 @@ impl App {
                         NetworkStatus::Failed("received an invalid first-move yield".to_string());
                 }
             }
+            NetworkEvent::OpponentConceded => {
+                let applied = match &mut self.current_scene {
+                    Scene::PlayingTTT(game) => game.apply_remote_concession(),
+                    _ => false,
+                };
+                if !applied {
+                    self.network_status =
+                        NetworkStatus::Failed("received an invalid concession".to_string());
+                }
+            }
             event => {
                 if let Some(status) = event.into_status() {
                     self.network_status = status;
@@ -511,6 +521,22 @@ impl App {
         }
     }
 
+    /// Handles 'c' key input to concede an active online game.
+    pub fn handle_concede(&mut self) {
+        let online_connected = matches!(self.network_status, NetworkStatus::Connected { .. });
+        let conceded = match &mut self.current_scene {
+            Scene::PlayingTTT(game)
+                if matches!(game.mode, GameMode::OnlinePvP(_)) && online_connected =>
+            {
+                game.concede_online()
+            }
+            _ => false,
+        };
+        if conceded {
+            self.send_online_action(NetworkCommand::Concede);
+        }
+    }
+
     /// Handles 'r' key input to reset the current game.
     pub fn handle_reset(&mut self) {
         let online_connected = matches!(self.network_status, NetworkStatus::Connected { .. });
@@ -667,6 +693,19 @@ mod tests {
         assert_eq!(game.board.state, GameState::Playing);
         assert_eq!(game.active_player, O);
         assert_eq!(game.turn, 0);
+    }
+
+    #[test]
+    fn test_received_concession_awards_local_player_the_win() {
+        let mut app = App::new();
+        app.handle_network_event(NetworkEvent::Connected { mark: X });
+
+        app.handle_network_event(NetworkEvent::OpponentConceded);
+
+        let Scene::PlayingTTT(game) = &app.current_scene else {
+            panic!("expected online tic tac toe game");
+        };
+        assert_eq!(game.board.state, GameState::Won(X));
     }
 
     #[test]

@@ -197,6 +197,30 @@ impl GamePlayTTT {
         true
     }
 
+    pub fn concede_online(&mut self) -> bool {
+        let GameMode::OnlinePvP(local_mark) = self.mode else {
+            return false;
+        };
+        if self.board.state != GameState::Playing {
+            return false;
+        }
+
+        self.board.state = GameState::Won(local_mark.switch());
+        true
+    }
+
+    pub fn apply_remote_concession(&mut self) -> bool {
+        let GameMode::OnlinePvP(local_mark) = self.mode else {
+            return false;
+        };
+        if self.board.state != GameState::Playing {
+            return false;
+        }
+
+        self.board.state = GameState::Won(local_mark);
+        true
+    }
+
     pub fn request_online_rematch(&mut self) -> bool {
         if !matches!(self.mode, GameMode::OnlinePvP(_))
             || self.board.state == GameState::Playing
@@ -665,6 +689,19 @@ mod tests {
         assert!(!game.play_remote_move(1, 1));
         assert!(!game.play_remote_move(3, 0));
         assert_eq!(game.turn, 2);
+    }
+
+    #[test]
+    fn test_online_concession_awards_win_to_other_player() {
+        let mut local = GamePlayTTT::new(GameMode::OnlinePvP(Mark::X));
+        assert!(local.concede_online());
+        assert_eq!(local.board.state, GameState::Won(Mark::O));
+        assert!(!local.concede_online());
+
+        let mut remote = GamePlayTTT::new(GameMode::OnlinePvP(Mark::X));
+        assert!(remote.apply_remote_concession());
+        assert_eq!(remote.board.state, GameState::Won(Mark::X));
+        assert!(!remote.apply_remote_concession());
     }
 
     #[test]

@@ -19,6 +19,7 @@ pub enum NetworkCommand {
     SendMove(MoveMessage),
     SendRematchReady,
     YieldFirstMove,
+    Concede,
     Disconnect,
 }
 
@@ -30,6 +31,7 @@ pub enum NetworkEvent {
     MoveReceived(MoveMessage),
     RematchReadyReceived,
     YieldFirstMoveReceived,
+    OpponentConceded,
     OpponentDisconnected,
     Disconnected,
     Failed(String),
@@ -65,7 +67,8 @@ impl NetworkEvent {
             NetworkEvent::Connected { mark } => Some(NetworkStatus::Connected { mark }),
             NetworkEvent::MoveReceived(_)
             | NetworkEvent::RematchReadyReceived
-            | NetworkEvent::YieldFirstMoveReceived => None,
+            | NetworkEvent::YieldFirstMoveReceived
+            | NetworkEvent::OpponentConceded => None,
             NetworkEvent::OpponentDisconnected => Some(NetworkStatus::OpponentDisconnected),
             NetworkEvent::Disconnected => Some(NetworkStatus::Idle),
             NetworkEvent::Failed(error) => Some(NetworkStatus::Failed(error)),
@@ -211,6 +214,14 @@ async fn run_network_worker(
                         )
                         .await;
                     }
+                    NetworkCommand::Concede => {
+                        send_worker_game_message(
+                            &mut session,
+                            &event_tx,
+                            GameMessage::Concede,
+                        )
+                        .await;
+                    }
                     command => {
                         operation_id += 1;
                         if let Some(task) = pending.take() {
@@ -244,7 +255,8 @@ async fn run_network_worker(
                             }
                             NetworkCommand::SendMove(_)
                             | NetworkCommand::SendRematchReady
-                            | NetworkCommand::YieldFirstMove => unreachable!(),
+                            | NetworkCommand::YieldFirstMove
+                            | NetworkCommand::Concede => unreachable!(),
                         }
                     }
                 }
@@ -276,6 +288,9 @@ async fn run_network_worker(
                     }
                     Ok(GameMessage::YieldFirstMove) => {
                         let _ = event_tx.send(NetworkEvent::YieldFirstMoveReceived);
+                    }
+                    Ok(GameMessage::Concede) => {
+                        let _ = event_tx.send(NetworkEvent::OpponentConceded);
                     }
                     Err(ReceiveGameMessageError::Disconnected(_)) => {
                         if let Some(session) = session.take() {
@@ -651,6 +666,15 @@ mod tests {
                 .recv_timeout(std::time::Duration::from_secs(5))
                 .unwrap(),
             NetworkEvent::RematchReadyReceived
+        );
+
+        host.send(NetworkCommand::Concede).unwrap();
+        assert_eq!(
+            joiner
+                .event_rx
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .unwrap(),
+            NetworkEvent::OpponentConceded
         );
 
         host.send(NetworkCommand::Disconnect).unwrap();

@@ -513,15 +513,15 @@ fn render_ttt_instructions(
         match game.mode {
             GameMode::OnlinePvP(local_mark) if local_mark != game.active_player => vec![
                 "Waiting for opponent".to_string(),
-                "M: Main Menu | Q: Quit".to_string(),
+                "C: Concede | M: Main Menu | Q: Quit".to_string(),
             ],
             GameMode::OnlinePvP(_) if game.turn == 0 => vec![
                 "S: Let Opponent Move First | Arrow Keys: Move".to_string(),
-                "Enter: Place Mark | M: Main Menu | Q: Quit".to_string(),
+                "Enter: Place Mark | C: Concede | M: Main Menu | Q: Quit".to_string(),
             ],
             GameMode::OnlinePvP(_) => vec![
                 "Arrow Keys: Move | Enter: Place Mark".to_string(),
-                "M: Main Menu | Q: Quit".to_string(),
+                "C: Concede | M: Main Menu | Q: Quit".to_string(),
             ],
             GameMode::EvE(_, _) => {
                 if game.turn == 0 {
