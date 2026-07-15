@@ -9,7 +9,9 @@ use crate::ai::{Game, Move};
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BigBoard {
     boards: [SmallBoard; 9],
+    /// Current completion state of the Ultimate board.
     pub state: GameState,
+    /// Board that must receive the next move, or `None` when any board is legal.
     pub active_board: Option<(usize, usize)>,
 }
 

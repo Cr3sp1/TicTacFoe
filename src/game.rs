@@ -1,12 +1,28 @@
+/// Classic 3x3 tic-tac-toe board.
 pub mod base;
+/// Ultimate tic-tac-toe board composed of nine classic boards.
 pub mod ultimate;
 
 use std::fmt;
 
+use serde::{Deserialize, Serialize};
+
+/// Identifies the supported tic-tac-toe rule set.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GameVariant {
+    /// Classic 3x3 tic-tac-toe.
+    Classic,
+    /// Ultimate tic-tac-toe played across nine boards.
+    Ultimate,
+}
+
 /// Represents a player's mark (X or O) on the tic-tac-toe board.
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub enum Mark {
+    /// The X mark.
     X,
+    /// The O mark.
     O,
 }
 

@@ -1,0 +1,360 @@
+//! Serializable handshake and in-match messages used by the peer protocol.
+
+use std::fmt;
+
+use serde::{Deserialize, Serialize};
+
+use crate::game::{GameVariant, Mark};
+
+/// Version required from both peers during the handshake.
+pub const PROTOCOL_VERSION: u16 = 1;
+
+/// Messages exchanged while peers negotiate a match.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum HandshakeMessage {
+    /// Initial request sent by the joining peer.
+    Hello {
+        /// Protocol version supported by the joiner.
+        protocol_version: u16,
+        /// Game variant requested by the joiner.
+        game: GameVariant,
+    },
+    /// Acceptance sent by the host with the joiner's assigned mark.
+    Welcome {
+        /// Protocol version selected by the host.
+        protocol_version: u16,
+        /// Mark assigned to the joining peer.
+        mark: Mark,
+        /// Game variant accepted by the host.
+        game: GameVariant,
+    },
+    /// Rejection sent by the host before closing the connection.
+    Rejected {
+        /// Human-readable reason for rejecting the handshake.
+        reason: String,
+    },
+}
+
+impl HandshakeMessage {
+    /// Creates a hello message for the requested game variant.
+    pub fn hello(game: GameVariant) -> Self {
+        Self::Hello {
+            protocol_version: PROTOCOL_VERSION,
+            game,
+        }
+    }
+
+    /// Creates a welcome message assigning a mark and game variant.
+    pub fn welcome(mark: Mark, game: GameVariant) -> Self {
+        Self::Welcome {
+            protocol_version: PROTOCOL_VERSION,
+            mark,
+            game,
+        }
+    }
+
+    /// Creates a handshake rejection with a human-readable reason.
+    pub fn rejected(reason: impl Into<String>) -> Self {
+        Self::Rejected {
+            reason: reason.into(),
+        }
+    }
+}
+
+/// Serializes a handshake message as JSON.
+pub fn encode(message: &HandshakeMessage) -> Result<Vec<u8>, serde_json::Error> {
+    serde_json::to_vec(message)
+}
+
+/// Deserializes and validates a handshake message from JSON.
+pub fn decode(bytes: &[u8]) -> Result<HandshakeMessage, serde_json::Error> {
+    serde_json::from_slice(bytes)
+}
+
+/// Validated coordinates for a classic tic-tac-toe move.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(try_from = "MoveCoordinates")]
+pub struct MoveMessage {
+    row: u8,
+    col: u8,
+}
+
+impl MoveMessage {
+    /// Creates a move when both coordinates are within a 3x3 board.
+    pub fn new(row: u8, col: u8) -> Result<Self, InvalidMoveCoordinates> {
+        if row < 3 && col < 3 {
+            Ok(Self { row, col })
+        } else {
+            Err(InvalidMoveCoordinates { row, col })
+        }
+    }
+
+    /// Returns the zero-based row.
+    pub fn row(self) -> usize {
+        self.row.into()
+    }
+
+    /// Returns the zero-based column.
+    pub fn col(self) -> usize {
+        self.col.into()
+    }
+}
+
+#[derive(Deserialize)]
+struct MoveCoordinates {
+    row: u8,
+    col: u8,
+}
+
+impl TryFrom<MoveCoordinates> for MoveMessage {
+    type Error = InvalidMoveCoordinates;
+
+    fn try_from(coordinates: MoveCoordinates) -> Result<Self, Self::Error> {
+        Self::new(coordinates.row, coordinates.col)
+    }
+}
+
+/// Error returned when classic move coordinates are outside a 3x3 board.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct InvalidMoveCoordinates {
+    row: u8,
+    col: u8,
+}
+
+impl fmt::Display for InvalidMoveCoordinates {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "move coordinates ({}, {}) are outside the board",
+            self.row, self.col
+        )
+    }
+}
+
+impl std::error::Error for InvalidMoveCoordinates {}
+
+/// Validated board and cell coordinates for an Ultimate move.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(try_from = "UltimateMoveCoordinates")]
+pub struct UltimateMoveMessage {
+    board_row: u8,
+    board_col: u8,
+    cell_row: u8,
+    cell_col: u8,
+}
+
+impl UltimateMoveMessage {
+    /// Creates a move when all board and cell coordinates are within 3x3 grids.
+    pub fn new(
+        board_row: u8,
+        board_col: u8,
+        cell_row: u8,
+        cell_col: u8,
+    ) -> Result<Self, InvalidUltimateMoveCoordinates> {
+        if board_row < 3 && board_col < 3 && cell_row < 3 && cell_col < 3 {
+            Ok(Self {
+                board_row,
+                board_col,
+                cell_row,
+                cell_col,
+            })
+        } else {
+            Err(InvalidUltimateMoveCoordinates {
+                board_row,
+                board_col,
+                cell_row,
+                cell_col,
+            })
+        }
+    }
+
+    /// Returns the zero-based small-board row.
+    pub fn board_row(self) -> usize {
+        self.board_row.into()
+    }
+    /// Returns the zero-based small-board column.
+    pub fn board_col(self) -> usize {
+        self.board_col.into()
+    }
+    /// Returns the zero-based cell row within the small board.
+    pub fn cell_row(self) -> usize {
+        self.cell_row.into()
+    }
+    /// Returns the zero-based cell column within the small board.
+    pub fn cell_col(self) -> usize {
+        self.cell_col.into()
+    }
+}
+
+#[derive(Deserialize)]
+struct UltimateMoveCoordinates {
+    board_row: u8,
+    board_col: u8,
+    cell_row: u8,
+    cell_col: u8,
+}
+
+impl TryFrom<UltimateMoveCoordinates> for UltimateMoveMessage {
+    type Error = InvalidUltimateMoveCoordinates;
+
+    fn try_from(coordinates: UltimateMoveCoordinates) -> Result<Self, Self::Error> {
+        Self::new(
+            coordinates.board_row,
+            coordinates.board_col,
+            coordinates.cell_row,
+            coordinates.cell_col,
+        )
+    }
+}
+
+/// Error returned when any Ultimate move coordinate is outside its 3x3 grid.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct InvalidUltimateMoveCoordinates {
+    board_row: u8,
+    board_col: u8,
+    cell_row: u8,
+    cell_col: u8,
+}
+
+impl fmt::Display for InvalidUltimateMoveCoordinates {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "ultimate move coordinates ({}, {}, {}, {}) are outside the board",
+            self.board_row, self.board_col, self.cell_row, self.cell_col
+        )
+    }
+}
+
+impl std::error::Error for InvalidUltimateMoveCoordinates {}
+
+/// Messages exchanged during an active match.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum GameMessage {
+    /// Places a mark in a classic game.
+    Move {
+        /// Validated classic board position.
+        position: MoveMessage,
+    },
+    /// Places a mark in an Ultimate game.
+    UltimateMove {
+        /// Validated Ultimate board and cell position.
+        position: UltimateMoveMessage,
+    },
+    /// Announces readiness to begin a rematch.
+    RematchReady,
+    /// Gives the remote player the first move.
+    YieldFirstMove,
+    /// Concedes the active match.
+    Concede,
+}
+
+/// Serializes an in-match message as JSON.
+pub fn encode_game_message(message: &GameMessage) -> Result<Vec<u8>, serde_json::Error> {
+    serde_json::to_vec(message)
+}
+
+/// Deserializes and validates an in-match message from JSON.
+pub fn decode_game_message(bytes: &[u8]) -> Result<GameMessage, serde_json::Error> {
+    serde_json::from_slice(bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejection_round_trips_with_reason() {
+        let message = HandshakeMessage::rejected("game variant mismatch");
+
+        let encoded = encode(&message).unwrap();
+        let decoded = decode(&encoded).unwrap();
+
+        assert_eq!(decoded, message);
+    }
+
+    #[test]
+    fn hello_round_trips() {
+        let message = HandshakeMessage::hello(GameVariant::Classic);
+
+        let encoded = encode(&message).unwrap();
+        let decoded = decode(&encoded).unwrap();
+
+        assert_eq!(decoded, message);
+    }
+
+    #[test]
+    fn welcome_round_trips_with_assigned_mark() {
+        let message = HandshakeMessage::welcome(Mark::O, GameVariant::Ultimate);
+
+        let encoded = encode(&message).unwrap();
+        let decoded = decode(&encoded).unwrap();
+
+        assert_eq!(decoded, message);
+    }
+
+    #[test]
+    fn move_round_trips_with_valid_coordinates() {
+        let message = MoveMessage::new(2, 1).unwrap();
+
+        let game_message = GameMessage::Move { position: message };
+        let encoded = encode_game_message(&game_message).unwrap();
+        let decoded = decode_game_message(&encoded).unwrap();
+
+        assert_eq!(decoded, game_message);
+    }
+
+    #[test]
+    fn move_outside_board_is_rejected_while_decoding() {
+        let result = decode_game_message(br#"{"type":"move","position":{"row":3,"col":0}}"#);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn ultimate_move_round_trips_with_valid_coordinates() {
+        let position = UltimateMoveMessage::new(2, 1, 0, 2).unwrap();
+        let message = GameMessage::UltimateMove { position };
+
+        let encoded = encode_game_message(&message).unwrap();
+        let decoded = decode_game_message(&encoded).unwrap();
+
+        assert_eq!(decoded, message);
+        assert_eq!(position.board_row(), 2);
+        assert_eq!(position.board_col(), 1);
+        assert_eq!(position.cell_row(), 0);
+        assert_eq!(position.cell_col(), 2);
+    }
+
+    #[test]
+    fn ultimate_move_outside_board_is_rejected_while_decoding() {
+        let result = decode_game_message(
+            br#"{"type":"ultimate_move","position":{"board_row":1,"board_col":0,"cell_row":3,"cell_col":2}}"#,
+        );
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn game_actions_round_trip() {
+        for message in [
+            GameMessage::RematchReady,
+            GameMessage::YieldFirstMove,
+            GameMessage::Concede,
+        ] {
+            let encoded = encode_game_message(&message).unwrap();
+            let decoded = decode_game_message(&encoded).unwrap();
+
+            assert_eq!(decoded, message);
+        }
+    }
+
+    #[test]
+    fn malformed_message_is_rejected() {
+        let result = decode(br#"{"type":"welcome","protocol_version":1}"#);
+
+        assert!(result.is_err());
+    }
+}

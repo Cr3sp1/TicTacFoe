@@ -9,6 +9,7 @@ use std::fmt;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SmallBoard {
     cells: [Option<Mark>; 9],
+    /// Current completion state of the board.
     pub state: GameState,
 }
 

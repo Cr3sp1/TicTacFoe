@@ -2,20 +2,21 @@
 
 ![gif](./media/utt.gif)
 
-A terminal-based Ultimate Tic-Tac-Toe game built with Rust and Ratatui.
+A terminal-based classic and Ultimate tic-tac-toe game built with Rust and Ratatui.
 
 ## Features
-- **Choose Mode**: Both classic and Ultimate version of tic-tac-toe are avaliable.
+- **Choose Mode**: Both classic and Ultimate versions of tic-tac-toe are available.
+- **Online PvP**: Play classic or Ultimate matches over a peer-to-peer connection.
 - **Local PvP**: Play against another person on the same computer.
 - **Play vs AI**: Challenge an AI opponent.
 - **AI vs AI**: Let two AI opponents fight against each other.
-- **Multiple AI Options**: Choose between AIs with three different levels of strenght.
-- **Monte Carlo Tree Search AI**: The strongest AI option implements the MCTS algorithm, the same used by [AlphaGo](https://en.wikipedia.org/wiki/AlphaGo). 
+- **Multiple AI Options**: Choose between AIs with three different levels of strength.
+- **Monte Carlo Tree Search AI**: The strongest AI option implements the MCTS algorithm, the algorithm used by [AlphaGo](https://en.wikipedia.org/wiki/AlphaGo).
 - **Intuitive TUI**: Clean terminal user interface with responsive keyboard navigation.
 
 ## Requirements
 Linux, Windows or macOS operating system.
-Installing via Cargo or from source additionally requires Rust 1.70 or higher and Cargo already installed.
+Installing via Cargo or from source additionally requires Rust 1.85 or higher and Cargo already installed.
 
 ## Installation and Usage
 
@@ -60,7 +61,7 @@ cargo build --release
 ```
 Then run with:
 ```bash
-cargo run
+cargo run --release
 ```
 
 Or directly run the compiled binary:
@@ -69,18 +70,35 @@ Or directly run the compiled binary:
 ./target/release/tic-tac-foe
 ```
 
+## Online Matches
+
+Online play is available for both classic and Ultimate tic-tac-toe.
+
+1. Both players select the same game variant and choose **Online PvP**.
+2. One player selects **Host Match** and shares the displayed ticket.
+3. The other player selects **Join Match**, pastes the ticket, and presses Enter.
+
+The connection first attempts direct LAN discovery and can use public relays when the players are on different networks. Tickets may be pasted with or without the spaces and line breaks shown by the TUI.
+
+After a match has ended, one can request a rematch with `R`. The rematch starts when both players are ready.
+
+If an opponent leaves, the remaining player is notified and can return to the main menu or quit.
+
 ## AI Options
-We provide three AIs with different levels of strenght to play against or put against each other:
+We provide three AIs with different levels of strength to play against or put against each other:
 
 - **Weak**: Just moves randomly.
 - **Medium**: Chooses winning moves if available and tries to avoid losses, but has no foresight.
-- **Strong**: Uses the [MCTS](https://en.wikipedia.org/wiki/Monte_Carlo_tree_search) algorithm to choose moves that improve the chances of winning in the long run. 
+- **Strong**: Uses the [MCTS](https://en.wikipedia.org/wiki/Monte_Carlo_tree_search) algorithm to choose moves that improve the chances of winning in the long run.
 
 ## Dependencies
 
 - [ratatui](https://github.com/ratatui-org/ratatui) - Terminal UI framework.
 - [crossterm](https://github.com/crossterm-rs/crossterm) - Terminal manipulation.
 - [rand](https://github.com/rust-random/rand) - Random number generation.
+- [tokio](https://github.com/tokio-rs/tokio) - Asynchronous network runtime.
+- [iroh](https://github.com/n0-computer/iroh) - Peer-to-peer connectivity and endpoint tickets.
+- [serde](https://github.com/serde-rs/serde) - Network message serialization.
 
 ## License
 

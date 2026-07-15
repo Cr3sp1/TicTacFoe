@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.1.0] - 2026/07/15
+
+### Added
+- Peer-to-peer online matches for classic and Ultimate tic-tac-toe using iroh [#1](https://github.com/Cr3sp1/TicTacFoe/pull/1).
+- LAN-first connectivity with public relay fallback and shareable endpoint tickets [#1](https://github.com/Cr3sp1/TicTacFoe/pull/1).
+- Online match hosting, joining, game-variant negotiation, and handshake error reporting [#1](https://github.com/Cr3sp1/TicTacFoe/pull/1).
+- Synchronized moves, first-move yielding, concessions, two-player rematches, and opponent disconnect handling [#1](https://github.com/Cr3sp1/TicTacFoe/pull/1).
+
+### Changed
+- Network work runs asynchronously on a lazily started Tokio worker while the TUI remains synchronous [#1](https://github.com/Cr3sp1/TicTacFoe/pull/1).
+
 ## [1.0.0] - 2026/02/28
 
 ### Added
