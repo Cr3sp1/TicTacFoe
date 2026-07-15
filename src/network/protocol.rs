@@ -2,16 +2,9 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use crate::game::Mark;
+use crate::game::{GameVariant, Mark};
 
-pub const PROTOCOL_VERSION: u16 = 2;
-
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum GameVariant {
-    Classic,
-    Ultimate,
-}
+pub const PROTOCOL_VERSION: u16 = 1;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -24,6 +17,9 @@ pub enum HandshakeMessage {
         protocol_version: u16,
         mark: Mark,
         game: GameVariant,
+    },
+    Rejected {
+        reason: String,
     },
 }
 
@@ -40,6 +36,12 @@ impl HandshakeMessage {
             protocol_version: PROTOCOL_VERSION,
             mark,
             game,
+        }
+    }
+
+    pub fn rejected(reason: impl Into<String>) -> Self {
+        Self::Rejected {
+            reason: reason.into(),
         }
     }
 }
@@ -218,6 +220,16 @@ pub fn decode_game_message(bytes: &[u8]) -> Result<GameMessage, serde_json::Erro
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rejection_round_trips_with_reason() {
+        let message = HandshakeMessage::rejected("game variant mismatch");
+
+        let encoded = encode(&message).unwrap();
+        let decoded = decode(&encoded).unwrap();
+
+        assert_eq!(decoded, message);
+    }
 
     #[test]
     fn hello_round_trips() {

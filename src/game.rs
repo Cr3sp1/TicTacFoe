@@ -5,6 +5,13 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GameVariant {
+    Classic,
+    Ultimate,
+}
+
 /// Represents a player's mark (X or O) on the tic-tac-toe board.
 #[derive(Copy, Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub enum Mark {

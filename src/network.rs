@@ -1,9 +1,9 @@
 pub mod protocol;
 
 use self::protocol::{
-    GameMessage, GameVariant, HandshakeMessage, MoveMessage, PROTOCOL_VERSION, UltimateMoveMessage,
+    GameMessage, HandshakeMessage, MoveMessage, PROTOCOL_VERSION, UltimateMoveMessage,
 };
-use crate::game::Mark;
+use crate::game::{GameVariant, Mark};
 use iroh::{
     Endpoint, EndpointAddr,
     endpoint::{BindError, ConnectError, ConnectingError, Connection, presets},
@@ -443,27 +443,40 @@ async fn perform_host_handshake(
         .await
         .map_err(|error| error.to_string())?;
 
-    match protocol::decode(&bytes).map_err(|error| error.to_string())? {
-        HandshakeMessage::Hello {
+    let validation = match protocol::decode(&bytes) {
+        Ok(HandshakeMessage::Hello {
             protocol_version,
             game: requested_game,
-        } if protocol_version == PROTOCOL_VERSION && requested_game == game => {}
-        HandshakeMessage::Hello {
+        }) if protocol_version == PROTOCOL_VERSION && requested_game == game => Ok(()),
+        Ok(HandshakeMessage::Hello {
             protocol_version, ..
-        } if protocol_version != PROTOCOL_VERSION => {
-            return Err(format!("unsupported protocol version: {protocol_version}"));
+        }) if protocol_version != PROTOCOL_VERSION => {
+            Err(format!("unsupported protocol version: {protocol_version}"))
         }
-        HandshakeMessage::Hello {
+        Ok(HandshakeMessage::Hello {
             game: requested_game,
             ..
-        } => {
-            return Err(format!(
-                "game variant mismatch: expected {game:?}, received {requested_game:?}"
-            ));
+        }) => Err(format!(
+            "game variant mismatch: expected {game:?}, received {requested_game:?}"
+        )),
+        Ok(HandshakeMessage::Welcome { .. } | HandshakeMessage::Rejected { .. }) => {
+            Err("expected hello handshake message".to_string())
         }
-        HandshakeMessage::Welcome { .. } => {
-            return Err("expected hello handshake message".to_string());
-        }
+        Err(error) => Err(format!("invalid handshake message: {error}")),
+    };
+
+    if let Err(error) = validation {
+        let response = protocol::encode(&HandshakeMessage::rejected(error.clone()))
+            .map_err(|encode_error| encode_error.to_string())?;
+        send.write_all(&response)
+            .await
+            .map_err(|write_error| write_error.to_string())?;
+        send.finish()
+            .map_err(|finish_error| finish_error.to_string())?;
+        send.stopped()
+            .await
+            .map_err(|stop_error| stop_error.to_string())?;
+        return Err(error);
     }
 
     let response = protocol::encode(&HandshakeMessage::welcome(Mark::O, game))
@@ -512,6 +525,7 @@ async fn perform_join_handshake(
         } => Err(format!(
             "game variant mismatch: expected {game:?}, received {accepted_game:?}"
         )),
+        HandshakeMessage::Rejected { reason } => Err(reason),
         HandshakeMessage::Hello { .. } => Err("expected welcome handshake message".to_string()),
     }
 }
@@ -759,13 +773,23 @@ mod tests {
             NetworkEvent::Connecting
         );
 
-        let event = host
+        let host_event = host
             .event_rx
             .recv_timeout(std::time::Duration::from_secs(5))
             .unwrap();
-        assert!(
-            matches!(event, NetworkEvent::Failed(error) if error.contains("game variant mismatch"))
-        );
+        let joiner_event = joiner
+            .event_rx
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .unwrap();
+
+        let NetworkEvent::Failed(host_error) = host_event else {
+            panic!("expected host handshake failure");
+        };
+        let NetworkEvent::Failed(joiner_error) = joiner_event else {
+            panic!("expected joiner handshake failure");
+        };
+        assert!(host_error.contains("game variant mismatch"));
+        assert_eq!(joiner_error, host_error);
     }
 
     #[test]

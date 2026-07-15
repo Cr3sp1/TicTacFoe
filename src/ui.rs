@@ -23,9 +23,9 @@ pub fn render(f: &mut Frame, app: &App) {
     match &app.current_scene {
         Scene::MainMenu(menu) => render_menu(f, menu, "Select Game"),
         Scene::TTTMenu(menu) | Scene::UTTMenu(menu) => render_menu(f, menu, "Select Game Mode"),
-        Scene::OnlineTTTMenu(menu) => render_menu(f, menu, "Select Connection Method"),
-        Scene::HostingOnlineTTT => render_hosting_ttt(f, &app.network_status),
-        Scene::JoiningOnlineTTT(input) => render_joining_ttt(f, input, &app.network_status),
+        Scene::OnlineMenu(menu, _) => render_menu(f, menu, "Select Connection Method"),
+        Scene::HostingOnline(_) => render_hosting_ttt(f, &app.network_status),
+        Scene::JoiningOnline(input, _) => render_joining_ttt(f, input, &app.network_status),
         Scene::AIMenu(menu, status) => render_menu(f, menu, ai_menu_title(status)),
         Scene::PlayingTTT(game) => render_game_ttt(f, game, &app.network_status),
         Scene::PlayingUTT(game) => render_game_utt(f, game),
@@ -144,7 +144,8 @@ fn render_hosting_ttt(f: &mut Frame, status: &NetworkStatus) {
         }
         NetworkStatus::Failed(error) => {
             f.render_widget(
-                Paragraph::new(error.clone())
+                Paragraph::new(format!("Error: {error}"))
+                    .style(Style::default().fg(Color::Red))
                     .alignment(Alignment::Center)
                     .wrap(Wrap { trim: false }),
                 content[2],

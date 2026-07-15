@@ -1,7 +1,7 @@
 use crate::ai::{AI, Game};
 use crate::game::base::SmallBoard;
 use crate::game::ultimate::BigBoard;
-use crate::game::{Board, GameState, Mark};
+use crate::game::{Board, GameState, GameVariant, Mark};
 use crate::utils::{
     Position, move_selection_down_playable, move_selection_left_playable,
     move_selection_right_playable, move_selection_up_playable, reset_position,
@@ -10,17 +10,18 @@ use crate::utils::{
 pub const MAIN_MENU_OPTIONS: [&'static str; 3] = ["Ultimate Tic Tac Toe", "Tic Tac Toe", "Quit"];
 pub const TTT_MENU_OPTIONS: [&'static str; 5] =
     ["Online PvP", "Local PvP", "Play vs AI", "AI vs AI", "Back"];
-pub const UTT_MENU_OPTIONS: [&'static str; 4] = ["Local PvP", "Play vs AI", "AI vs AI", "Back"];
+pub const UTT_MENU_OPTIONS: [&'static str; 5] =
+    ["Online PvP", "Local PvP", "Play vs AI", "AI vs AI", "Back"];
 pub const AI_MENU_OPTIONS: [&'static str; 4] = ["Weak", "Medium", "Strong", "Back"];
-pub const ONLINE_TTT_MENU_OPTIONS: [&'static str; 3] = ["Host Match", "Join Match", "Back"];
+pub const ONLINE_MENU_OPTIONS: [&'static str; 3] = ["Host Match", "Join Match", "Back"];
 
 /// Represents all the possible scenes.
 pub enum Scene {
     MainMenu(Menu),
     TTTMenu(Menu),
-    OnlineTTTMenu(Menu),
-    HostingOnlineTTT,
-    JoiningOnlineTTT(TicketInput),
+    OnlineMenu(Menu, GameVariant),
+    HostingOnline(GameVariant),
+    JoiningOnline(TicketInput, GameVariant),
     UTTMenu(Menu),
     AIMenu(Menu, AIMenuStatus),
     PlayingTTT(GamePlayTTT),
