@@ -748,9 +748,6 @@ mod tests {
     fn test_opening_online_menu_does_not_start_network() {
         let mut app = App::new();
         app.go_to_ttt_menu();
-        app.handle_down();
-        app.handle_down();
-        app.handle_down();
 
         app.handle_enter();
 
@@ -851,6 +848,7 @@ mod tests {
         let mut app = App::new();
         app.handle_down();
         app.handle_enter();
+        app.handle_down();
         app.handle_enter();
         app.handle_enter();
 

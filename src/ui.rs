@@ -23,7 +23,7 @@ pub fn render(f: &mut Frame, app: &App) {
     match &app.current_scene {
         Scene::MainMenu(menu) => render_menu(f, menu, "Select Game"),
         Scene::TTTMenu(menu) | Scene::UTTMenu(menu) => render_menu(f, menu, "Select Game Mode"),
-        Scene::OnlineTTTMenu(menu) => render_menu(f, menu, "Online Tic Tac Toe"),
+        Scene::OnlineTTTMenu(menu) => render_menu(f, menu, "Select Connection Method"),
         Scene::HostingOnlineTTT => render_hosting_ttt(f, &app.network_status),
         Scene::JoiningOnlineTTT(input) => render_joining_ttt(f, input, &app.network_status),
         Scene::AIMenu(menu, status) => render_menu(f, menu, ai_menu_title(status)),

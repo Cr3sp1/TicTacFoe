@@ -9,8 +9,8 @@ use crate::utils::{
 
 pub const MAIN_MENU_OPTIONS: [&'static str; 3] = ["Ultimate Tic Tac Toe", "Tic Tac Toe", "Quit"];
 pub const TTT_MENU_OPTIONS: [&'static str; 5] =
-    ["Play vs AI", "AI vs AI", "Local PvP", "Online PvP", "Back"];
-pub const UTT_MENU_OPTIONS: [&'static str; 4] = ["Play vs AI", "AI vs AI", "Local PvP", "Back"];
+    ["Online PvP", "Local PvP", "Play vs AI", "AI vs AI", "Back"];
+pub const UTT_MENU_OPTIONS: [&'static str; 4] = ["Local PvP", "Play vs AI", "AI vs AI", "Back"];
 pub const AI_MENU_OPTIONS: [&'static str; 4] = ["Weak", "Medium", "Strong", "Back"];
 pub const ONLINE_TTT_MENU_OPTIONS: [&'static str; 3] = ["Host Match", "Join Match", "Back"];
 
@@ -581,7 +581,7 @@ mod tests {
         let menu = Menu::new(TTT_MENU_OPTIONS.to_vec());
         assert_eq!(menu.selected_option, 0);
         assert_eq!(menu.options.len(), TTT_MENU_OPTIONS.len());
-        assert_eq!(menu.get_selected(), "Play vs AI");
+        assert_eq!(menu.get_selected(), "Online PvP");
     }
 
     #[test]
@@ -589,7 +589,7 @@ mod tests {
         let mut menu = Menu::new(TTT_MENU_OPTIONS.to_vec());
         menu.move_down();
         assert_eq!(menu.selected_option, 1);
-        assert_eq!(menu.get_selected(), "AI vs AI");
+        assert_eq!(menu.get_selected(), "Local PvP");
     }
 
     #[test]
