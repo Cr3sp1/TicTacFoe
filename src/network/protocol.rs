@@ -4,26 +4,42 @@ use serde::{Deserialize, Serialize};
 
 use crate::game::Mark;
 
-pub const PROTOCOL_VERSION: u16 = 1;
+pub const PROTOCOL_VERSION: u16 = 2;
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GameVariant {
+    Classic,
+    Ultimate,
+}
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum HandshakeMessage {
-    Hello { protocol_version: u16 },
-    Welcome { protocol_version: u16, mark: Mark },
+    Hello {
+        protocol_version: u16,
+        game: GameVariant,
+    },
+    Welcome {
+        protocol_version: u16,
+        mark: Mark,
+        game: GameVariant,
+    },
 }
 
 impl HandshakeMessage {
-    pub fn hello() -> Self {
+    pub fn hello(game: GameVariant) -> Self {
         Self::Hello {
             protocol_version: PROTOCOL_VERSION,
+            game,
         }
     }
 
-    pub fn welcome(mark: Mark) -> Self {
+    pub fn welcome(mark: Mark, game: GameVariant) -> Self {
         Self::Welcome {
             protocol_version: PROTOCOL_VERSION,
             mark,
+            game,
         }
     }
 }
@@ -116,7 +132,7 @@ mod tests {
 
     #[test]
     fn hello_round_trips() {
-        let message = HandshakeMessage::hello();
+        let message = HandshakeMessage::hello(GameVariant::Classic);
 
         let encoded = encode(&message).unwrap();
         let decoded = decode(&encoded).unwrap();
@@ -126,7 +142,7 @@ mod tests {
 
     #[test]
     fn welcome_round_trips_with_assigned_mark() {
-        let message = HandshakeMessage::welcome(Mark::O);
+        let message = HandshakeMessage::welcome(Mark::O, GameVariant::Ultimate);
 
         let encoded = encode(&message).unwrap();
         let decoded = decode(&encoded).unwrap();

@@ -1,6 +1,6 @@
 pub mod protocol;
 
-use self::protocol::{GameMessage, HandshakeMessage, MoveMessage, PROTOCOL_VERSION};
+use self::protocol::{GameMessage, GameVariant, HandshakeMessage, MoveMessage, PROTOCOL_VERSION};
 use crate::game::Mark;
 use iroh::{
     Endpoint, EndpointAddr,
@@ -14,8 +14,8 @@ pub const ALPN: &[u8] = b"/tic-tac-foe/1";
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum NetworkCommand {
-    Host,
-    Join(String),
+    Host(GameVariant),
+    Join { ticket: String, game: GameVariant },
     SendMove(MoveMessage),
     SendRematchReady,
     YieldFirstMove,
@@ -27,7 +27,7 @@ pub enum NetworkCommand {
 pub enum NetworkEvent {
     Hosting { ticket: String, relay_ready: bool },
     Connecting,
-    Connected { mark: Mark },
+    Connected { mark: Mark, game: GameVariant },
     MoveReceived(MoveMessage),
     RematchReadyReceived,
     YieldFirstMoveReceived,
@@ -64,7 +64,7 @@ impl NetworkEvent {
                 relay_ready,
             }),
             NetworkEvent::Connecting => Some(NetworkStatus::Connecting),
-            NetworkEvent::Connected { mark } => Some(NetworkStatus::Connected { mark }),
+            NetworkEvent::Connected { mark, .. } => Some(NetworkStatus::Connected { mark }),
             NetworkEvent::MoveReceived(_)
             | NetworkEvent::RematchReadyReceived
             | NetworkEvent::YieldFirstMoveReceived
@@ -167,6 +167,7 @@ struct NetworkSession {
     endpoint: Endpoint,
     connection: Connection,
     mark: Mark,
+    game: GameVariant,
 }
 
 struct OperationResult {
@@ -232,21 +233,21 @@ async fn run_network_worker(
                         }
 
                         match command {
-                            NetworkCommand::Host => {
+                            NetworkCommand::Host(game) => {
                                 let result_tx = result_tx.clone();
                                 let event_tx = event_tx.clone();
                                 let id = operation_id;
                                 pending = Some(tokio::spawn(async move {
-                                    let result = host_session(event_tx).await;
+                                    let result = host_session(game, event_tx).await;
                                     let _ = result_tx.send(OperationResult { id, result });
                                 }));
                             }
-                            NetworkCommand::Join(ticket) => {
+                            NetworkCommand::Join { ticket, game } => {
                                 let result_tx = result_tx.clone();
                                 let event_tx = event_tx.clone();
                                 let id = operation_id;
                                 pending = Some(tokio::spawn(async move {
-                                    let result = join_session(ticket, event_tx).await;
+                                    let result = join_session(ticket, game, event_tx).await;
                                     let _ = result_tx.send(OperationResult { id, result });
                                 }));
                             }
@@ -270,8 +271,9 @@ async fn run_network_worker(
                 match result {
                     Ok(new_session) => {
                         let mark = new_session.mark;
+                        let game = new_session.game;
                         session = Some(new_session);
-                        let _ = event_tx.send(NetworkEvent::Connected { mark });
+                        let _ = event_tx.send(NetworkEvent::Connected { mark, game });
                     }
                     Err(error) => {
                         let _ = event_tx.send(NetworkEvent::Failed(error));
@@ -348,7 +350,10 @@ async fn close_session(session: NetworkSession) {
     session.endpoint.close().await;
 }
 
-async fn host_session(event_tx: mpsc::Sender<NetworkEvent>) -> Result<NetworkSession, String> {
+async fn host_session(
+    game: GameVariant,
+    event_tx: mpsc::Sender<NetworkEvent>,
+) -> Result<NetworkSession, String> {
     let (endpoint, ticket) = create_host().await.map_err(|error| error.to_string())?;
     let _ = event_tx.send(NetworkEvent::Hosting {
         ticket,
@@ -367,12 +372,13 @@ async fn host_session(event_tx: mpsc::Sender<NetworkEvent>) -> Result<NetworkSes
         }
     };
 
-    let mark = perform_host_handshake(&connection).await?;
+    let mark = perform_host_handshake(&connection, game).await?;
 
     Ok(NetworkSession {
         endpoint,
         connection,
         mark,
+        game,
     })
 }
 
@@ -385,6 +391,7 @@ async fn wait_for_connection(endpoint: &Endpoint) -> Result<Connection, String> 
 
 async fn join_session(
     ticket: String,
+    game: GameVariant,
     event_tx: mpsc::Sender<NetworkEvent>,
 ) -> Result<NetworkSession, String> {
     let _ = event_tx.send(NetworkEvent::Connecting);
@@ -393,19 +400,23 @@ async fn join_session(
     let connection = connect_to_host(&endpoint, addr)
         .await
         .map_err(|error| error.to_string())?;
-    let mark = perform_join_handshake(&connection).await?;
+    let mark = perform_join_handshake(&connection, game).await?;
 
     Ok(NetworkSession {
         endpoint,
         connection,
         mark,
+        game,
     })
 }
 
 const MAX_HANDSHAKE_SIZE: usize = 1024;
 const MAX_GAME_MESSAGE_SIZE: usize = 64;
 
-async fn perform_host_handshake(connection: &Connection) -> Result<Mark, String> {
+async fn perform_host_handshake(
+    connection: &Connection,
+    game: GameVariant,
+) -> Result<Mark, String> {
     let (mut send, mut receive) = connection
         .accept_bi()
         .await
@@ -416,17 +427,30 @@ async fn perform_host_handshake(connection: &Connection) -> Result<Mark, String>
         .map_err(|error| error.to_string())?;
 
     match protocol::decode(&bytes).map_err(|error| error.to_string())? {
-        HandshakeMessage::Hello { protocol_version } if protocol_version == PROTOCOL_VERSION => {}
-        HandshakeMessage::Hello { protocol_version } => {
+        HandshakeMessage::Hello {
+            protocol_version,
+            game: requested_game,
+        } if protocol_version == PROTOCOL_VERSION && requested_game == game => {}
+        HandshakeMessage::Hello {
+            protocol_version, ..
+        } if protocol_version != PROTOCOL_VERSION => {
             return Err(format!("unsupported protocol version: {protocol_version}"));
+        }
+        HandshakeMessage::Hello {
+            game: requested_game,
+            ..
+        } => {
+            return Err(format!(
+                "game variant mismatch: expected {game:?}, received {requested_game:?}"
+            ));
         }
         HandshakeMessage::Welcome { .. } => {
             return Err("expected hello handshake message".to_string());
         }
     }
 
-    let response =
-        protocol::encode(&HandshakeMessage::welcome(Mark::O)).map_err(|error| error.to_string())?;
+    let response = protocol::encode(&HandshakeMessage::welcome(Mark::O, game))
+        .map_err(|error| error.to_string())?;
     send.write_all(&response)
         .await
         .map_err(|error| error.to_string())?;
@@ -435,12 +459,16 @@ async fn perform_host_handshake(connection: &Connection) -> Result<Mark, String>
     Ok(Mark::X)
 }
 
-async fn perform_join_handshake(connection: &Connection) -> Result<Mark, String> {
+async fn perform_join_handshake(
+    connection: &Connection,
+    game: GameVariant,
+) -> Result<Mark, String> {
     let (mut send, mut receive) = connection
         .open_bi()
         .await
         .map_err(|error| error.to_string())?;
-    let hello = protocol::encode(&HandshakeMessage::hello()).map_err(|error| error.to_string())?;
+    let hello =
+        protocol::encode(&HandshakeMessage::hello(game)).map_err(|error| error.to_string())?;
     send.write_all(&hello)
         .await
         .map_err(|error| error.to_string())?;
@@ -454,10 +482,19 @@ async fn perform_join_handshake(connection: &Connection) -> Result<Mark, String>
         HandshakeMessage::Welcome {
             protocol_version,
             mark,
-        } if protocol_version == PROTOCOL_VERSION => Ok(mark),
+            game: accepted_game,
+        } if protocol_version == PROTOCOL_VERSION && accepted_game == game => Ok(mark),
         HandshakeMessage::Welcome {
             protocol_version, ..
-        } => Err(format!("unsupported protocol version: {protocol_version}")),
+        } if protocol_version != PROTOCOL_VERSION => {
+            Err(format!("unsupported protocol version: {protocol_version}"))
+        }
+        HandshakeMessage::Welcome {
+            game: accepted_game,
+            ..
+        } => Err(format!(
+            "game variant mismatch: expected {game:?}, received {accepted_game:?}"
+        )),
         HandshakeMessage::Hello { .. } => Err("expected welcome handshake message".to_string()),
     }
 }
@@ -555,7 +592,9 @@ mod tests {
     fn test_hosting_emits_lan_ticket_before_relay_is_ready() {
         let client = NetworkClient::start().unwrap();
 
-        client.send(NetworkCommand::Host).unwrap();
+        client
+            .send(NetworkCommand::Host(GameVariant::Classic))
+            .unwrap();
 
         let event = client
             .event_rx
@@ -579,7 +618,10 @@ mod tests {
         let client = NetworkClient::start().unwrap();
 
         client
-            .send(NetworkCommand::Join("invalid ticket".to_string()))
+            .send(NetworkCommand::Join {
+                ticket: "invalid ticket".to_string(),
+                game: GameVariant::Classic,
+            })
             .unwrap();
 
         let connecting = client
@@ -600,7 +642,8 @@ mod tests {
         let host = NetworkClient::start().unwrap();
         let joiner = NetworkClient::start().unwrap();
 
-        host.send(NetworkCommand::Host).unwrap();
+        host.send(NetworkCommand::Host(GameVariant::Classic))
+            .unwrap();
         let NetworkEvent::Hosting { ticket, .. } = host
             .event_rx
             .recv_timeout(std::time::Duration::from_secs(2))
@@ -609,7 +652,12 @@ mod tests {
             panic!("expected hosting event");
         };
 
-        joiner.send(NetworkCommand::Join(ticket)).unwrap();
+        joiner
+            .send(NetworkCommand::Join {
+                ticket,
+                game: GameVariant::Classic,
+            })
+            .unwrap();
         assert_eq!(
             joiner
                 .event_rx
@@ -623,11 +671,12 @@ mod tests {
     }
 
     #[test]
-    fn test_workers_exchange_game_events_and_disconnect() {
+    fn test_workers_reject_mismatched_game_variants() {
         let host = NetworkClient::start().unwrap();
         let joiner = NetworkClient::start().unwrap();
 
-        host.send(NetworkCommand::Host).unwrap();
+        host.send(NetworkCommand::Host(GameVariant::Classic))
+            .unwrap();
         let NetworkEvent::Hosting { ticket, .. } = host
             .event_rx
             .recv_timeout(std::time::Duration::from_secs(2))
@@ -635,7 +684,50 @@ mod tests {
         else {
             panic!("expected hosting event");
         };
-        joiner.send(NetworkCommand::Join(ticket)).unwrap();
+
+        joiner
+            .send(NetworkCommand::Join {
+                ticket,
+                game: GameVariant::Ultimate,
+            })
+            .unwrap();
+        assert_eq!(
+            joiner
+                .event_rx
+                .recv_timeout(std::time::Duration::from_secs(2))
+                .unwrap(),
+            NetworkEvent::Connecting
+        );
+
+        let event = host
+            .event_rx
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .unwrap();
+        assert!(
+            matches!(event, NetworkEvent::Failed(error) if error.contains("game variant mismatch"))
+        );
+    }
+
+    #[test]
+    fn test_workers_exchange_game_events_and_disconnect() {
+        let host = NetworkClient::start().unwrap();
+        let joiner = NetworkClient::start().unwrap();
+
+        host.send(NetworkCommand::Host(GameVariant::Classic))
+            .unwrap();
+        let NetworkEvent::Hosting { ticket, .. } = host
+            .event_rx
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .unwrap()
+        else {
+            panic!("expected hosting event");
+        };
+        joiner
+            .send(NetworkCommand::Join {
+                ticket,
+                game: GameVariant::Classic,
+            })
+            .unwrap();
         assert_eq!(
             joiner
                 .event_rx
@@ -700,7 +792,7 @@ mod tests {
                 .recv_timeout(std::time::Duration::from_secs(5))
                 .unwrap()
             {
-                NetworkEvent::Connected { mark } => return mark,
+                NetworkEvent::Connected { mark, .. } => return mark,
                 NetworkEvent::Hosting { .. } => {}
                 event => panic!("expected connected event, got {event:?}"),
             }

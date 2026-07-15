@@ -6,7 +6,7 @@ use crate::game::Mark;
 use crate::game::Mark::{O, X};
 use crate::game::base::SmallBoard;
 use crate::game::ultimate::BigBoard;
-use crate::network::protocol::MoveMessage;
+use crate::network::protocol::{GameVariant, MoveMessage};
 use crate::network::{NetworkClient, NetworkCommand, NetworkEvent, NetworkStatus};
 use crate::scenes::{
     AI_MENU_OPTIONS, AIMenuStatus, GameMode, GamePlayTTT, GamePlayUTT, MAIN_MENU_OPTIONS, Menu,
@@ -60,12 +60,15 @@ impl App {
 
     /// Starts hosting an online match.
     pub fn host_online_match(&mut self) -> std::io::Result<()> {
-        self.send_network_command(NetworkCommand::Host)
+        self.send_network_command(NetworkCommand::Host(GameVariant::Classic))
     }
 
     /// Attempts to join an online match using an iroh ticket.
     pub fn join_online_match(&mut self, ticket: String) -> std::io::Result<()> {
-        self.send_network_command(NetworkCommand::Join(ticket))
+        self.send_network_command(NetworkCommand::Join {
+            ticket,
+            game: GameVariant::Classic,
+        })
     }
 
     /// Disconnects the current online match without stopping the worker.
@@ -91,7 +94,13 @@ impl App {
 
     fn handle_network_event(&mut self, event: NetworkEvent) {
         match event {
-            NetworkEvent::Connected { mark } => {
+            NetworkEvent::Connected { mark, game } => {
+                if game != GameVariant::Classic {
+                    self.network_status = NetworkStatus::Failed(
+                        "ultimate online gameplay is not implemented yet".to_string(),
+                    );
+                    return;
+                }
                 self.network_status = NetworkStatus::Connected { mark };
                 self.start_ttt_game(GameMode::OnlinePvP(mark));
             }
@@ -636,7 +645,10 @@ mod tests {
     fn test_connected_event_starts_online_game_with_assigned_mark() {
         let mut app = App::new();
 
-        app.handle_network_event(NetworkEvent::Connected { mark: X });
+        app.handle_network_event(NetworkEvent::Connected {
+            mark: X,
+            game: GameVariant::Classic,
+        });
 
         assert_eq!(app.network_status, NetworkStatus::Connected { mark: X });
         let Scene::PlayingTTT(game) = &app.current_scene else {
@@ -648,7 +660,10 @@ mod tests {
     #[test]
     fn test_received_move_is_applied_to_online_game() {
         let mut app = App::new();
-        app.handle_network_event(NetworkEvent::Connected { mark: O });
+        app.handle_network_event(NetworkEvent::Connected {
+            mark: O,
+            game: GameVariant::Classic,
+        });
         let message = MoveMessage::new(1, 2).unwrap();
 
         app.handle_network_event(NetworkEvent::MoveReceived(message));
@@ -663,7 +678,10 @@ mod tests {
     #[test]
     fn test_received_yield_gives_local_player_first_move() {
         let mut app = App::new();
-        app.handle_network_event(NetworkEvent::Connected { mark: O });
+        app.handle_network_event(NetworkEvent::Connected {
+            mark: O,
+            game: GameVariant::Classic,
+        });
 
         app.handle_network_event(NetworkEvent::YieldFirstMoveReceived);
 
@@ -677,7 +695,10 @@ mod tests {
     #[test]
     fn test_received_rematch_readiness_completes_two_party_rematch() {
         let mut app = App::new();
-        app.handle_network_event(NetworkEvent::Connected { mark: X });
+        app.handle_network_event(NetworkEvent::Connected {
+            mark: X,
+            game: GameVariant::Classic,
+        });
         let Scene::PlayingTTT(game) = &mut app.current_scene else {
             panic!("expected online tic tac toe game");
         };
@@ -698,7 +719,10 @@ mod tests {
     #[test]
     fn test_received_concession_awards_local_player_the_win() {
         let mut app = App::new();
-        app.handle_network_event(NetworkEvent::Connected { mark: X });
+        app.handle_network_event(NetworkEvent::Connected {
+            mark: X,
+            game: GameVariant::Classic,
+        });
 
         app.handle_network_event(NetworkEvent::OpponentConceded);
 
@@ -711,7 +735,10 @@ mod tests {
     #[test]
     fn test_opponent_disconnect_freezes_online_game() {
         let mut app = App::new();
-        app.handle_network_event(NetworkEvent::Connected { mark: X });
+        app.handle_network_event(NetworkEvent::Connected {
+            mark: X,
+            game: GameVariant::Classic,
+        });
         app.handle_network_event(NetworkEvent::OpponentDisconnected);
 
         app.handle_right();
@@ -733,7 +760,10 @@ mod tests {
     #[test]
     fn test_invalid_received_move_sets_failed_status() {
         let mut app = App::new();
-        app.handle_network_event(NetworkEvent::Connected { mark: X });
+        app.handle_network_event(NetworkEvent::Connected {
+            mark: X,
+            game: GameVariant::Classic,
+        });
 
         app.handle_network_event(NetworkEvent::MoveReceived(MoveMessage::new(0, 0).unwrap()));
 
