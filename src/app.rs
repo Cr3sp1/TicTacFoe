@@ -6,7 +6,7 @@ use crate::game::Mark::{O, X};
 use crate::game::base::SmallBoard;
 use crate::game::ultimate::BigBoard;
 use crate::game::{GameVariant, Mark};
-use crate::network::protocol::MoveMessage;
+use crate::network::protocol::{MoveMessage, UltimateMoveMessage};
 use crate::network::{NetworkClient, NetworkCommand, NetworkEvent, NetworkStatus};
 use crate::scenes::{
     AI_MENU_OPTIONS, AIMenuStatus, GameMode, GamePlayTTT, GamePlayUTT, MAIN_MENU_OPTIONS, Menu,
@@ -106,6 +106,22 @@ impl App {
                 if !applied {
                     self.network_status =
                         NetworkStatus::Failed("received an invalid online move".to_string());
+                }
+            }
+            NetworkEvent::UltimateMoveReceived(message) => {
+                let applied = match &mut self.current_scene {
+                    Scene::PlayingUTT(game) => game.play_remote_move(
+                        message.board_row(),
+                        message.board_col(),
+                        message.cell_row(),
+                        message.cell_col(),
+                    ),
+                    _ => false,
+                };
+                if !applied {
+                    self.network_status = NetworkStatus::Failed(
+                        "received an invalid online ultimate move".to_string(),
+                    );
                 }
             }
             NetworkEvent::RematchReadyReceived => {
@@ -291,7 +307,12 @@ impl App {
             {
                 game.input_left()
             }
-            Scene::PlayingUTT(game) => game.input_left(),
+            Scene::PlayingUTT(game)
+                if !online_frozen || !matches!(game.mode, GameMode::OnlinePvP(_)) =>
+            {
+                game.input_left()
+            }
+            Scene::PlayingUTT(_) => {}
             _ => {}
         }
     }
@@ -305,7 +326,12 @@ impl App {
             {
                 game.input_right()
             }
-            Scene::PlayingUTT(game) => game.input_right(),
+            Scene::PlayingUTT(game)
+                if !online_frozen || !matches!(game.mode, GameMode::OnlinePvP(_)) =>
+            {
+                game.input_right()
+            }
+            Scene::PlayingUTT(_) => {}
             _ => {}
         }
     }
@@ -328,7 +354,12 @@ impl App {
                 game.input_up()
             }
             Scene::PlayingTTT(_) => {}
-            Scene::PlayingUTT(game) => game.input_up(),
+            Scene::PlayingUTT(game)
+                if !online_frozen || !matches!(game.mode, GameMode::OnlinePvP(_)) =>
+            {
+                game.input_up()
+            }
+            Scene::PlayingUTT(_) => {}
         }
     }
 
@@ -350,7 +381,12 @@ impl App {
                 game.input_down()
             }
             Scene::PlayingTTT(_) => {}
-            Scene::PlayingUTT(game) => game.input_down(),
+            Scene::PlayingUTT(game)
+                if !online_frozen || !matches!(game.mode, GameMode::OnlinePvP(_)) =>
+            {
+                game.input_down()
+            }
+            Scene::PlayingUTT(_) => {}
         }
     }
 
@@ -377,6 +413,43 @@ impl App {
 
         if let Some(message) = message
             && let Err(error) = self.send_active_network_command(NetworkCommand::SendMove(message))
+        {
+            self.network_status = NetworkStatus::Failed(error.to_string());
+        }
+    }
+
+    fn play_utt_move(&mut self) {
+        let online_connected = matches!(self.network_status, NetworkStatus::Connected { .. });
+        let message = {
+            let Scene::PlayingUTT(game) = &mut self.current_scene else {
+                return;
+            };
+            let selected_board = game.selected_board;
+            let selected_cell = game.selected_cell;
+            let is_online = matches!(game.mode, GameMode::OnlinePvP(_));
+            if is_online && !online_connected {
+                return;
+            }
+
+            if game.input_enter() && is_online {
+                let selected_cell =
+                    selected_cell.expect("an applied ultimate move has a selected cell");
+                let board_row = u8::try_from(selected_board.row).expect("board row fits in u8");
+                let board_col = u8::try_from(selected_board.col).expect("board column fits in u8");
+                let cell_row = u8::try_from(selected_cell.row).expect("cell row fits in u8");
+                let cell_col = u8::try_from(selected_cell.col).expect("cell column fits in u8");
+                Some(
+                    UltimateMoveMessage::new(board_row, board_col, cell_row, cell_col)
+                        .expect("selected ultimate position is valid"),
+                )
+            } else {
+                None
+            }
+        };
+
+        if let Some(message) = message
+            && let Err(error) =
+                self.send_active_network_command(NetworkCommand::SendUltimateMove(message))
         {
             self.network_status = NetworkStatus::Failed(error.to_string());
         }
@@ -468,7 +541,7 @@ impl App {
             Scene::HostingOnline(_) => {}
             Scene::JoiningOnline(_, _) => self.submit_joining_online(),
             Scene::PlayingTTT(_) => self.play_ttt_move(),
-            Scene::PlayingUTT(game) => game.input_enter(),
+            Scene::PlayingUTT(_) => self.play_utt_move(),
         }
     }
 
@@ -476,6 +549,7 @@ impl App {
     ///
     /// Goes back to previous menu/move selection.
     pub fn handle_esc(&mut self) {
+        let online_frozen = matches!(self.network_status, NetworkStatus::OpponentDisconnected);
         match &mut self.current_scene {
             Scene::MainMenu(_) => self.quit(),
             Scene::TTTMenu(_) => self.go_to_main_menu(),
@@ -495,7 +569,12 @@ impl App {
                 AIMenuStatus::UTTeve(None) => self.go_to_utt_menu(),
                 AIMenuStatus::UTTeve(Some(_)) => self.go_to_ai_menu(AIMenuStatus::UTTeve(None)),
             },
-            Scene::PlayingUTT(game) => game.input_esc(),
+            Scene::PlayingUTT(game)
+                if !online_frozen || !matches!(game.mode, GameMode::OnlinePvP(_)) =>
+            {
+                game.input_esc()
+            }
+            Scene::PlayingUTT(_) => {}
             Scene::PlayingTTT(_) => {}
         }
     }
@@ -514,6 +593,7 @@ impl App {
                 game.play_second();
                 false
             }
+            Scene::PlayingUTT(game) if matches!(game.mode, GameMode::OnlinePvP(_)) => false,
             Scene::PlayingUTT(game) => {
                 game.play_second();
                 false
@@ -555,6 +635,7 @@ impl App {
                 game.reset_game();
                 false
             }
+            Scene::PlayingUTT(game) if matches!(game.mode, GameMode::OnlinePvP(_)) => false,
             Scene::PlayingUTT(game) => {
                 game.reset_game();
                 false
@@ -571,6 +652,9 @@ impl App {
         let is_online = matches!(
             &self.current_scene,
             Scene::PlayingTTT(game) if matches!(game.mode, GameMode::OnlinePvP(_))
+        ) || matches!(
+            &self.current_scene,
+            Scene::PlayingUTT(game) if matches!(game.mode, GameMode::OnlinePvP(_))
         );
         let is_game = matches!(
             self.current_scene,
@@ -667,6 +751,25 @@ mod tests {
             panic!("expected online ultimate tic tac toe game");
         };
         assert_eq!(game.mode, GameMode::OnlinePvP(O));
+    }
+
+    #[test]
+    fn test_received_ultimate_move_is_applied_to_online_game() {
+        let mut app = App::new();
+        app.handle_network_event(NetworkEvent::Connected {
+            mark: O,
+            game: GameVariant::Ultimate,
+        });
+        let message = UltimateMoveMessage::new(0, 0, 1, 2).unwrap();
+
+        app.handle_network_event(NetworkEvent::UltimateMoveReceived(message));
+
+        let Scene::PlayingUTT(game) = &app.current_scene else {
+            panic!("expected online ultimate tic tac toe game");
+        };
+        assert_eq!(game.big_board.get_board(0, 0).get(1, 2), Some(X));
+        assert_eq!(game.big_board.active_board, Some((1, 2)));
+        assert_eq!(game.active_player, O);
     }
 
     #[test]
@@ -767,6 +870,32 @@ mod tests {
         assert_eq!(game.turn, 0);
         assert_eq!(game.active_player, X);
         assert!(game.board.get(0, 0).is_none());
+    }
+
+    #[test]
+    fn test_opponent_disconnect_freezes_online_ultimate_game() {
+        let mut app = App::new();
+        app.handle_network_event(NetworkEvent::Connected {
+            mark: X,
+            game: GameVariant::Ultimate,
+        });
+        app.handle_network_event(NetworkEvent::OpponentDisconnected);
+
+        app.handle_right();
+        app.handle_down();
+        app.handle_enter();
+        app.handle_second();
+        app.handle_reset();
+
+        assert_eq!(app.network_status, NetworkStatus::OpponentDisconnected);
+        let Scene::PlayingUTT(game) = &app.current_scene else {
+            panic!("expected online ultimate tic tac toe game");
+        };
+        assert_eq!(game.selected_board.row, 0);
+        assert_eq!(game.selected_board.col, 0);
+        assert!(game.selected_cell.is_none());
+        assert_eq!(game.turn, 0);
+        assert_eq!(game.active_player, X);
     }
 
     #[test]

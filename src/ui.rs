@@ -28,7 +28,7 @@ pub fn render(f: &mut Frame, app: &App) {
         Scene::JoiningOnline(input, _) => render_joining_ttt(f, input, &app.network_status),
         Scene::AIMenu(menu, status) => render_menu(f, menu, ai_menu_title(status)),
         Scene::PlayingTTT(game) => render_game_ttt(f, game, &app.network_status),
-        Scene::PlayingUTT(game) => render_game_utt(f, game),
+        Scene::PlayingUTT(game) => render_game_utt(f, game, &app.network_status),
     }
 }
 
@@ -582,6 +582,30 @@ fn ttt_game_status(game: &GamePlayTTT, network_status: &NetworkStatus) -> (Strin
     }
 }
 
+fn utt_game_status(game: &GamePlayUTT, network_status: &NetworkStatus) -> (String, Style) {
+    if matches!(game.mode, GameMode::OnlinePvP(_))
+        && matches!(network_status, NetworkStatus::OpponentDisconnected)
+    {
+        return (
+            "Opponent left the game".to_string(),
+            Style::default()
+                .fg(Color::Magenta)
+                .add_modifier(Modifier::BOLD),
+        );
+    }
+    let (status, style) = game_status(game.big_board.state, game.active_player);
+    if game.big_board.state == GameState::Playing
+        && matches!(
+            game.mode,
+            GameMode::OnlinePvP(local_mark) if local_mark != game.active_player
+        )
+    {
+        (status, Style::default())
+    } else {
+        (status, style)
+    }
+}
+
 fn game_status(game_state: GameState, current_player: Mark) -> (String, Style) {
     match game_state {
         GameState::Playing => (
@@ -608,7 +632,7 @@ fn game_status(game_state: GameState, current_player: Mark) -> (String, Style) {
 }
 
 /// Renders the Ultimate Tic-Tac-Toe game screen.
-fn render_game_utt(f: &mut Frame, game: &GamePlayUTT) {
+fn render_game_utt(f: &mut Frame, game: &GamePlayUTT, network_status: &NetworkStatus) {
     if render_size_warning(f, 43, 20) {
         return;
     }
@@ -624,18 +648,18 @@ fn render_game_utt(f: &mut Frame, game: &GamePlayUTT) {
         .split(f.area());
 
     render_title(f, chunks[0]);
-    render_utt_board(f, chunks[1], game);
-    render_utt_instructions(f, chunks[2], game);
+    render_utt_board(f, chunks[1], game, network_status);
+    render_utt_instructions(f, chunks[2], game, network_status);
 }
 
 /// Renders the Ultimate Tic-Tac-Toe board.
-fn render_utt_board(f: &mut Frame, area: Rect, game: &GamePlayUTT) {
+fn render_utt_board(f: &mut Frame, area: Rect, game: &GamePlayUTT, network_status: &NetworkStatus) {
     let board_area = center_rect(area, 47, 21);
 
     let mut lines = vec![Line::from("")];
 
     // Add current player or game result
-    let (status, status_style) = game_status(game.big_board.state, game.active_player);
+    let (status, status_style) = utt_game_status(game, network_status);
 
     // Render the meta-board (3x3 grid of small boards)
     for big_y in 0..5 {
@@ -662,7 +686,8 @@ fn render_utt_board(f: &mut Frame, area: Rect, game: &GamePlayUTT) {
                         continue;
                     }
                 };
-                let (selection, board_style) = small_board_selection_style(game, big_row, big_col);
+                let (selection, board_style) =
+                    small_board_selection_style(game, big_row, big_col, network_status);
                 let small_board = game.big_board.get_board(big_row, big_col);
 
                 y_spans
@@ -692,6 +717,7 @@ fn small_board_selection_style(
     game: &GamePlayUTT,
     big_row: usize,
     big_col: usize,
+    network_status: &NetworkStatus,
 ) -> (Option<(Position, Mark)>, Style) {
     let small_board = game.big_board.get_board(big_row, big_col);
     if matches!(game.mode, GameMode::EvE(_, _)) {
@@ -707,7 +733,15 @@ fn small_board_selection_style(
             },
         }
     } else {
-        if game.selected_board.row == big_row
+        let selection_visible = match game.mode {
+            GameMode::OnlinePvP(local_mark) => {
+                matches!(network_status, NetworkStatus::Connected { .. })
+                    && local_mark == game.active_player
+            }
+            _ => true,
+        };
+        if selection_visible
+            && game.selected_board.row == big_row
             && game.selected_board.col == big_col
             && game.big_board.state == GameState::Playing
         {
@@ -730,44 +764,57 @@ fn small_board_selection_style(
 }
 
 /// Renders instructions for Ultimate Tic-Tac-Toe.
-fn render_utt_instructions(f: &mut Frame, area: Rect, game: &GamePlayUTT) {
-    let instructions = if game.big_board.state == GameState::Playing {
+fn render_utt_instructions(
+    f: &mut Frame,
+    area: Rect,
+    game: &GamePlayUTT,
+    network_status: &NetworkStatus,
+) {
+    let instructions = if matches!(game.mode, GameMode::OnlinePvP(_))
+        && matches!(network_status, NetworkStatus::OpponentDisconnected)
+    {
+        vec!["M: Main Menu | Q: Quit".to_string()]
+    } else if game.big_board.state == GameState::Playing {
         match game.mode {
-            GameMode::EvE(_, _) => {
-                if game.turn == 0 {
-                    vec![
-                        "S: Let O Move First | Enter: Let Active AI play".to_string(),
-                        "R: Reset Game | M: Main Menu | Q: Quit".to_string(),
-                    ]
-                } else {
-                    vec![
-                        "Enter: Let Active AI play".to_string(),
-                        "R: Reset Game | M: Main Menu | Q: Quit".to_string(),
-                    ]
-                }
-            }
-            _ => {
-                if game.selected_cell.is_none() {
-                    vec![
-                        "Arrow Keys: Select Board | Enter: Confirm Board".to_string(),
-                        "R: Reset Game | M: Main Menu | Q: Quit".to_string(),
-                    ]
-                } else {
-                    if game.big_board.active_board.is_none() {
-                        vec![
-                            "Arrow Keys: Select Cell | Enter: Place Mark".to_string(),
-                            "Esc: Change Board | R: Reset Game | M: Main Menu | Q: Quit"
-                                .to_string(),
-                        ]
-                    } else {
-                        vec![
-                            "Arrow Keys: Select Cell | Enter: Place Mark".to_string(),
-                            "R: Reset Game | M: Main Menu | Q: Quit".to_string(),
-                        ]
-                    }
-                }
-            }
+            GameMode::OnlinePvP(local_mark) if local_mark != game.active_player => vec![
+                "Waiting for opponent".to_string(),
+                "M: Main Menu | Q: Quit".to_string(),
+            ],
+            GameMode::OnlinePvP(_) if game.selected_cell.is_none() => vec![
+                "Arrow Keys: Select Board | Enter: Confirm Board".to_string(),
+                "M: Main Menu | Q: Quit".to_string(),
+            ],
+            GameMode::OnlinePvP(_) if game.big_board.active_board.is_none() => vec![
+                "Arrow Keys: Select Cell | Enter: Place Mark".to_string(),
+                "Esc: Change Board | M: Main Menu | Q: Quit".to_string(),
+            ],
+            GameMode::OnlinePvP(_) => vec![
+                "Arrow Keys: Select Cell | Enter: Place Mark".to_string(),
+                "M: Main Menu | Q: Quit".to_string(),
+            ],
+            GameMode::EvE(_, _) if game.turn == 0 => vec![
+                "S: Let O Move First | Enter: Let Active AI play".to_string(),
+                "R: Reset Game | M: Main Menu | Q: Quit".to_string(),
+            ],
+            GameMode::EvE(_, _) => vec![
+                "Enter: Let Active AI play".to_string(),
+                "R: Reset Game | M: Main Menu | Q: Quit".to_string(),
+            ],
+            _ if game.selected_cell.is_none() => vec![
+                "Arrow Keys: Select Board | Enter: Confirm Board".to_string(),
+                "R: Reset Game | M: Main Menu | Q: Quit".to_string(),
+            ],
+            _ if game.big_board.active_board.is_none() => vec![
+                "Arrow Keys: Select Cell | Enter: Place Mark".to_string(),
+                "Esc: Change Board | R: Reset Game | M: Main Menu | Q: Quit".to_string(),
+            ],
+            _ => vec![
+                "Arrow Keys: Select Cell | Enter: Place Mark".to_string(),
+                "R: Reset Game | M: Main Menu | Q: Quit".to_string(),
+            ],
         }
+    } else if matches!(game.mode, GameMode::OnlinePvP(_)) {
+        vec!["M: Main Menu | Q: Quit".to_string()]
     } else {
         vec!["R: Reset Game | M: Main Menu | Q: Quit".to_string()]
     };
@@ -876,6 +923,37 @@ mod tests {
         game.active_player = Mark::O;
         let (_, local_style) = ttt_game_status(&game, &NetworkStatus::Connected { mark: Mark::O });
         assert_eq!(local_style.fg, Some(Color::LightYellow));
+    }
+
+    #[test]
+    fn test_online_ultimate_turn_status_uses_local_and_opponent_colors() {
+        let mut game = GamePlayUTT::new(GameMode::OnlinePvP(Mark::O));
+        let connected = NetworkStatus::Connected { mark: Mark::O };
+
+        let (_, opponent_style) = utt_game_status(&game, &connected);
+        assert_eq!(opponent_style, Style::default());
+        let (selection, board_style) = small_board_selection_style(&game, 0, 0, &connected);
+        assert!(selection.is_none());
+        assert_eq!(board_style, Style::default());
+
+        game.active_player = Mark::O;
+        let (_, local_style) = utt_game_status(&game, &connected);
+        assert_eq!(local_style.fg, Some(Color::LightYellow));
+        let (_, board_style) = small_board_selection_style(&game, 0, 0, &connected);
+        assert_eq!(board_style.fg, Some(Color::LightYellow));
+    }
+
+    #[test]
+    fn test_disconnected_opponent_replaces_online_ultimate_status() {
+        let game = GamePlayUTT::new(GameMode::OnlinePvP(Mark::X));
+
+        let (status, style) = utt_game_status(&game, &NetworkStatus::OpponentDisconnected);
+
+        assert_eq!(status, "Opponent left the game");
+        assert_eq!(style.fg, Some(Color::Magenta));
+        let (selection, _) =
+            small_board_selection_style(&game, 0, 0, &NetworkStatus::OpponentDisconnected);
+        assert!(selection.is_none());
     }
 
     #[test]

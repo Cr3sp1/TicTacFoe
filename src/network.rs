@@ -417,7 +417,14 @@ async fn join_session(
     let connection = connect_to_host(&endpoint, addr)
         .await
         .map_err(|error| error.to_string())?;
-    let mark = perform_join_handshake(&connection, game).await?;
+    let mark = match perform_join_handshake(&connection, game).await {
+        Ok(mark) => mark,
+        Err(error) => {
+            connection.close(0u32.into(), b"handshake failed");
+            endpoint.close().await;
+            return Err(error);
+        }
+    };
 
     Ok(NetworkSession {
         endpoint,
@@ -473,9 +480,7 @@ async fn perform_host_handshake(
             .map_err(|write_error| write_error.to_string())?;
         send.finish()
             .map_err(|finish_error| finish_error.to_string())?;
-        send.stopped()
-            .await
-            .map_err(|stop_error| stop_error.to_string())?;
+        connection.closed().await;
         return Err(error);
     }
 

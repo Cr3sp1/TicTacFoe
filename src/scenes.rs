@@ -436,7 +436,13 @@ impl GamePlayUTT {
     }
 
     /// Selects the board if not selected already, else plays the move
-    pub fn input_enter(&mut self) {
+    pub fn input_enter(&mut self) -> bool {
+        if matches!(
+            self.mode,
+            GameMode::OnlinePvP(local_mark) if local_mark != self.active_player
+        ) {
+            return false;
+        }
         if self.selected_cell.is_none() && !matches!(self.mode, GameMode::EvE(_, _)) {
             let mut cell_position = Position { row: 0, col: 0 };
             let selected_board = self
@@ -444,8 +450,9 @@ impl GamePlayUTT {
                 .get_board(self.selected_board.row, self.selected_board.col);
             reset_position(selected_board, &mut cell_position);
             self.selected_cell = Some(cell_position);
+            false
         } else {
-            self.play_move();
+            self.play_move()
         }
     }
 
