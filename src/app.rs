@@ -127,6 +127,7 @@ impl App {
             NetworkEvent::RematchReadyReceived => {
                 let applied = match &mut self.current_scene {
                     Scene::PlayingTTT(game) => game.receive_remote_rematch_ready(),
+                    Scene::PlayingUTT(game) => game.receive_remote_rematch_ready(),
                     _ => false,
                 };
                 if !applied {
@@ -137,6 +138,7 @@ impl App {
             NetworkEvent::YieldFirstMoveReceived => {
                 let applied = match &mut self.current_scene {
                     Scene::PlayingTTT(game) => game.apply_remote_yield_first_move(),
+                    Scene::PlayingUTT(game) => game.apply_remote_yield_first_move(),
                     _ => false,
                 };
                 if !applied {
@@ -147,6 +149,7 @@ impl App {
             NetworkEvent::OpponentConceded => {
                 let applied = match &mut self.current_scene {
                     Scene::PlayingTTT(game) => game.apply_remote_concession(),
+                    Scene::PlayingUTT(game) => game.apply_remote_concession(),
                     _ => false,
                 };
                 if !applied {
@@ -593,6 +596,11 @@ impl App {
                 game.play_second();
                 false
             }
+            Scene::PlayingUTT(game)
+                if matches!(game.mode, GameMode::OnlinePvP(_)) && online_connected =>
+            {
+                game.yield_online_first_move()
+            }
             Scene::PlayingUTT(game) if matches!(game.mode, GameMode::OnlinePvP(_)) => false,
             Scene::PlayingUTT(game) => {
                 game.play_second();
@@ -610,6 +618,11 @@ impl App {
         let online_connected = matches!(self.network_status, NetworkStatus::Connected { .. });
         let conceded = match &mut self.current_scene {
             Scene::PlayingTTT(game)
+                if matches!(game.mode, GameMode::OnlinePvP(_)) && online_connected =>
+            {
+                game.concede_online()
+            }
+            Scene::PlayingUTT(game)
                 if matches!(game.mode, GameMode::OnlinePvP(_)) && online_connected =>
             {
                 game.concede_online()
@@ -634,6 +647,11 @@ impl App {
             Scene::PlayingTTT(game) => {
                 game.reset_game();
                 false
+            }
+            Scene::PlayingUTT(game)
+                if matches!(game.mode, GameMode::OnlinePvP(_)) && online_connected =>
+            {
+                game.request_online_rematch()
             }
             Scene::PlayingUTT(game) if matches!(game.mode, GameMode::OnlinePvP(_)) => false,
             Scene::PlayingUTT(game) => {
@@ -845,6 +863,22 @@ mod tests {
             panic!("expected online tic tac toe game");
         };
         assert_eq!(game.board.state, GameState::Won(X));
+    }
+
+    #[test]
+    fn test_received_ultimate_concession_awards_local_player_the_win() {
+        let mut app = App::new();
+        app.handle_network_event(NetworkEvent::Connected {
+            mark: X,
+            game: GameVariant::Ultimate,
+        });
+
+        app.handle_network_event(NetworkEvent::OpponentConceded);
+
+        let Scene::PlayingUTT(game) = &app.current_scene else {
+            panic!("expected online ultimate tic tac toe game");
+        };
+        assert_eq!(game.big_board.state, GameState::Won(X));
     }
 
     #[test]

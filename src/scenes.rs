@@ -378,6 +378,9 @@ pub struct GamePlayUTT {
     pub mode: GameMode,
     pub selected_board: Position,
     pub selected_cell: Option<Position>,
+    starting_player: Mark,
+    local_rematch_ready: bool,
+    remote_rematch_ready: bool,
 }
 
 impl GamePlayUTT {
@@ -392,6 +395,9 @@ impl GamePlayUTT {
             mode,
             selected_board: Position { row: 0, col: 0 },
             selected_cell: None,
+            starting_player: Mark::X,
+            local_rematch_ready: false,
+            remote_rematch_ready: false,
         }
     }
 
@@ -538,6 +544,109 @@ impl GamePlayUTT {
         self.active_player = self.active_player.switch();
     }
 
+    pub fn concede_online(&mut self) -> bool {
+        let GameMode::OnlinePvP(local_mark) = self.mode else {
+            return false;
+        };
+        if self.big_board.state != GameState::Playing {
+            return false;
+        }
+
+        self.big_board.state = GameState::Won(local_mark.switch());
+        true
+    }
+
+    pub fn apply_remote_concession(&mut self) -> bool {
+        let GameMode::OnlinePvP(local_mark) = self.mode else {
+            return false;
+        };
+        if self.big_board.state != GameState::Playing {
+            return false;
+        }
+
+        self.big_board.state = GameState::Won(local_mark);
+        true
+    }
+
+    pub fn request_online_rematch(&mut self) -> bool {
+        if !matches!(self.mode, GameMode::OnlinePvP(_))
+            || self.big_board.state == GameState::Playing
+            || self.local_rematch_ready
+        {
+            return false;
+        }
+
+        self.local_rematch_ready = true;
+        self.start_rematch_if_ready();
+        true
+    }
+
+    pub fn receive_remote_rematch_ready(&mut self) -> bool {
+        if !matches!(self.mode, GameMode::OnlinePvP(_))
+            || self.big_board.state == GameState::Playing
+        {
+            return false;
+        }
+        if self.remote_rematch_ready {
+            return true;
+        }
+
+        self.remote_rematch_ready = true;
+        self.start_rematch_if_ready();
+        true
+    }
+
+    pub fn yield_online_first_move(&mut self) -> bool {
+        let GameMode::OnlinePvP(local_mark) = self.mode else {
+            return false;
+        };
+        if self.big_board.state != GameState::Playing
+            || self.turn != 0
+            || self.active_player != local_mark
+        {
+            return false;
+        }
+
+        self.start_online_round(local_mark.switch());
+        true
+    }
+
+    pub fn apply_remote_yield_first_move(&mut self) -> bool {
+        let GameMode::OnlinePvP(local_mark) = self.mode else {
+            return false;
+        };
+        if self.big_board.state != GameState::Playing
+            || self.turn != 0
+            || self.active_player != local_mark.switch()
+        {
+            return false;
+        }
+
+        self.start_online_round(local_mark);
+        true
+    }
+
+    pub fn waiting_for_rematch(&self) -> bool {
+        self.local_rematch_ready
+    }
+
+    fn start_rematch_if_ready(&mut self) {
+        if self.local_rematch_ready && self.remote_rematch_ready {
+            self.start_online_round(self.starting_player.switch());
+        }
+    }
+
+    fn start_online_round(&mut self, starting_player: Mark) {
+        self.big_board = BigBoard::new();
+        self.active_player = starting_player;
+        self.turn = 0;
+        self.selected_board = Position { row: 0, col: 0 };
+        self.selected_cell = None;
+        self.starting_player = starting_player;
+        self.local_rematch_ready = false;
+        self.remote_rematch_ready = false;
+    }
+
     fn reset_selection(&mut self) {
         // If next action is constrained to active board, select it by default
         if let Some((active_row, active_col)) = self.big_board.active_board {
@@ -558,6 +667,9 @@ impl GamePlayUTT {
 
     /// Resets the game to initial state while keeping the same mode.
     pub fn reset_game(&mut self) {
+        if matches!(self.mode, GameMode::OnlinePvP(_)) {
+            return;
+        }
         self.big_board = BigBoard::new();
         self.active_player = Mark::X;
         self.turn = 0;
@@ -601,6 +713,9 @@ impl GamePlayUTT {
 
     /// Allows the AI to play first if the game just started.
     pub fn play_second(&mut self) {
+        if matches!(self.mode, GameMode::OnlinePvP(_)) {
+            return;
+        }
         if self.big_board.state == GameState::Playing && self.turn == 0 {
             self.active_player = Mark::O;
             match &mut self.mode {
@@ -847,6 +962,59 @@ mod tests {
         assert!(!game.play_remote_move(0, 0, 1, 2));
         assert!(!game.play_remote_move(3, 0, 0, 0));
         assert_eq!(game.turn, 2);
+    }
+
+    #[test]
+    fn test_online_ultimate_concession_awards_win_to_other_player() {
+        let mut local = GamePlayUTT::new(GameMode::OnlinePvP(Mark::X));
+        assert!(local.concede_online());
+        assert_eq!(local.big_board.state, GameState::Won(Mark::O));
+        assert!(!local.concede_online());
+
+        let mut remote = GamePlayUTT::new(GameMode::OnlinePvP(Mark::X));
+        assert!(remote.apply_remote_concession());
+        assert_eq!(remote.big_board.state, GameState::Won(Mark::X));
+        assert!(!remote.apply_remote_concession());
+    }
+
+    #[test]
+    fn test_online_ultimate_rematch_waits_for_both_players() {
+        let mut game = GamePlayUTT::new(GameMode::OnlinePvP(Mark::X));
+        game.selected_cell = Some(Position { row: 1, col: 2 });
+        assert!(game.play_move());
+        game.big_board.state = GameState::Won(Mark::X);
+
+        assert!(game.request_online_rematch());
+        assert!(game.waiting_for_rematch());
+        assert_eq!(game.big_board.state, GameState::Won(Mark::X));
+        assert!(!game.request_online_rematch());
+
+        assert!(game.receive_remote_rematch_ready());
+        assert_eq!(game.big_board.state, GameState::Playing);
+        assert_eq!(game.active_player, Mark::O);
+        assert_eq!(game.turn, 0);
+        assert_eq!(game.big_board.active_board, None);
+        assert!(game.selected_cell.is_none());
+        assert!(game.big_board.get_board(0, 0).get(1, 2).is_none());
+    }
+
+    #[test]
+    fn test_online_ultimate_yield_updates_next_rematch_order() {
+        let mut game = GamePlayUTT::new(GameMode::OnlinePvP(Mark::X));
+
+        assert!(game.yield_online_first_move());
+        assert_eq!(game.active_player, Mark::O);
+        assert!(!game.yield_online_first_move());
+
+        game.big_board.state = GameState::Draw;
+        assert!(game.request_online_rematch());
+        assert!(game.receive_remote_rematch_ready());
+        assert_eq!(game.active_player, Mark::X);
+
+        let mut remote = GamePlayUTT::new(GameMode::OnlinePvP(Mark::O));
+        assert!(remote.apply_remote_yield_first_move());
+        assert_eq!(remote.active_player, Mark::O);
+        assert!(!remote.apply_remote_yield_first_move());
     }
 
     #[test]

@@ -551,6 +551,8 @@ fn render_ttt_instructions(
                 }
             }
         }
+    } else if matches!(game.mode, GameMode::OnlinePvP(_)) {
+        vec!["R: Rematch | M: Main Menu | Q: Quit".to_string()]
     } else {
         vec!["R: Reset Game | M: Main Menu | Q: Quit".to_string()]
     };
@@ -774,23 +776,32 @@ fn render_utt_instructions(
         && matches!(network_status, NetworkStatus::OpponentDisconnected)
     {
         vec!["M: Main Menu | Q: Quit".to_string()]
+    } else if matches!(game.mode, GameMode::OnlinePvP(_)) && game.waiting_for_rematch() {
+        vec![
+            "Waiting for opponent".to_string(),
+            "M: Main Menu | Q: Quit".to_string(),
+        ]
     } else if game.big_board.state == GameState::Playing {
         match game.mode {
             GameMode::OnlinePvP(local_mark) if local_mark != game.active_player => vec![
                 "Waiting for opponent".to_string(),
-                "M: Main Menu | Q: Quit".to_string(),
+                "C: Concede | M: Main Menu | Q: Quit".to_string(),
+            ],
+            GameMode::OnlinePvP(_) if game.turn == 0 && game.selected_cell.is_none() => vec![
+                "S: Let Opponent Move First | Arrow Keys: Select Board".to_string(),
+                "Enter: Confirm Board | C: Concede | M: Main Menu | Q: Quit".to_string(),
             ],
             GameMode::OnlinePvP(_) if game.selected_cell.is_none() => vec![
                 "Arrow Keys: Select Board | Enter: Confirm Board".to_string(),
-                "M: Main Menu | Q: Quit".to_string(),
+                "C: Concede | M: Main Menu | Q: Quit".to_string(),
             ],
             GameMode::OnlinePvP(_) if game.big_board.active_board.is_none() => vec![
                 "Arrow Keys: Select Cell | Enter: Place Mark".to_string(),
-                "Esc: Change Board | M: Main Menu | Q: Quit".to_string(),
+                "Esc: Change Board | C: Concede | M: Main Menu | Q: Quit".to_string(),
             ],
             GameMode::OnlinePvP(_) => vec![
                 "Arrow Keys: Select Cell | Enter: Place Mark".to_string(),
-                "M: Main Menu | Q: Quit".to_string(),
+                "C: Concede | M: Main Menu | Q: Quit".to_string(),
             ],
             GameMode::EvE(_, _) if game.turn == 0 => vec![
                 "S: Let O Move First | Enter: Let Active AI play".to_string(),
@@ -814,7 +825,7 @@ fn render_utt_instructions(
             ],
         }
     } else if matches!(game.mode, GameMode::OnlinePvP(_)) {
-        vec!["M: Main Menu | Q: Quit".to_string()]
+        vec!["R: Rematch | M: Main Menu | Q: Quit".to_string()]
     } else {
         vec!["R: Reset Game | M: Main Menu | Q: Quit".to_string()]
     };
