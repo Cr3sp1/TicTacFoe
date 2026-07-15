@@ -59,16 +59,13 @@ impl App {
     }
 
     /// Starts hosting an online match.
-    pub fn host_online_match(&mut self) -> std::io::Result<()> {
-        self.send_network_command(NetworkCommand::Host(GameVariant::Classic))
+    pub fn host_online_match(&mut self, game: GameVariant) -> std::io::Result<()> {
+        self.send_network_command(NetworkCommand::Host(game))
     }
 
     /// Attempts to join an online match using an iroh ticket.
-    pub fn join_online_match(&mut self, ticket: String) -> std::io::Result<()> {
-        self.send_network_command(NetworkCommand::Join {
-            ticket,
-            game: GameVariant::Classic,
-        })
+    pub fn join_online_match(&mut self, ticket: String, game: GameVariant) -> std::io::Result<()> {
+        self.send_network_command(NetworkCommand::Join { ticket, game })
     }
 
     /// Disconnects the current online match without stopping the worker.
@@ -95,14 +92,11 @@ impl App {
     fn handle_network_event(&mut self, event: NetworkEvent) {
         match event {
             NetworkEvent::Connected { mark, game } => {
-                if game != GameVariant::Classic {
-                    self.network_status = NetworkStatus::Failed(
-                        "ultimate online gameplay is not implemented yet".to_string(),
-                    );
-                    return;
-                }
                 self.network_status = NetworkStatus::Connected { mark };
-                self.start_ttt_game(GameMode::OnlinePvP(mark));
+                match game {
+                    GameVariant::Classic => self.start_ttt_game(GameMode::OnlinePvP(mark)),
+                    GameVariant::Ultimate => self.start_utt_game(GameMode::OnlinePvP(mark)),
+                }
             }
             NetworkEvent::MoveReceived(message) => {
                 let applied = match &mut self.current_scene {
@@ -212,7 +206,7 @@ impl App {
     pub fn start_hosting_online_ttt(&mut self) {
         self.current_scene = Scene::HostingOnlineTTT;
         self.network_status = NetworkStatus::Idle;
-        if let Err(error) = self.host_online_match() {
+        if let Err(error) = self.host_online_match(GameVariant::Classic) {
             self.network_status = NetworkStatus::Failed(error.to_string());
         }
     }
@@ -272,7 +266,7 @@ impl App {
         }
         let ticket = input.value.clone();
         self.network_status = NetworkStatus::Connecting;
-        if let Err(error) = self.join_online_match(ticket) {
+        if let Err(error) = self.join_online_match(ticket, GameVariant::Classic) {
             self.network_status = NetworkStatus::Failed(error.to_string());
         }
     }
@@ -626,7 +620,8 @@ mod tests {
     fn test_online_command_starts_network_and_reports_invalid_ticket() {
         let mut app = App::new();
 
-        app.join_online_match("invalid ticket".to_string()).unwrap();
+        app.join_online_match("invalid ticket".to_string(), GameVariant::Classic)
+            .unwrap();
         assert!(app.network_is_active());
 
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1);
@@ -655,6 +650,22 @@ mod tests {
             panic!("expected online tic tac toe game");
         };
         assert_eq!(game.mode, GameMode::OnlinePvP(X));
+    }
+
+    #[test]
+    fn test_connected_event_starts_online_ultimate_game() {
+        let mut app = App::new();
+
+        app.handle_network_event(NetworkEvent::Connected {
+            mark: O,
+            game: GameVariant::Ultimate,
+        });
+
+        assert_eq!(app.network_status, NetworkStatus::Connected { mark: O });
+        let Scene::PlayingUTT(game) = &app.current_scene else {
+            panic!("expected online ultimate tic tac toe game");
+        };
+        assert_eq!(game.mode, GameMode::OnlinePvP(O));
     }
 
     #[test]

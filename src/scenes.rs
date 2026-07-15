@@ -457,40 +457,77 @@ impl GamePlayUTT {
 
     /// Attempts to make a move at the currently selected board and cell.
     ///
-    /// If the game is over does nothing. If there is no selected cell it panics.
+    /// Returns false if the game is over, no cell is selected, or it is the remote player's turn.
     /// After a valid move, checks for win/draw conditions and switches players.
     /// In PvE mode, triggers the AI to make its move.
-    pub fn play_move(&mut self) {
+    pub fn play_move(&mut self) -> bool {
         if self.big_board.state != GameState::Playing {
-            return;
+            return false;
         }
 
         match self.mode {
             GameMode::EvE(_, _) => {}
-            GameMode::OnlinePvP(_) => return,
+            GameMode::OnlinePvP(local_mark) if local_mark != self.active_player => return false,
             _ => {
-                let selected_cell = self.selected_cell.as_mut().unwrap();
-                self.big_board.make_move(
+                let Some(selected_cell) = self.selected_cell else {
+                    return false;
+                };
+                self.apply_move(
                     self.selected_board.row,
                     self.selected_board.col,
                     selected_cell.row,
                     selected_cell.col,
-                    self.active_player,
                 );
 
-                self.turn += 1;
-
-                self.active_player = self.active_player.switch();
-
                 if self.big_board.state != GameState::Playing {
-                    return;
+                    return true;
                 }
             }
         };
 
         self.ai_play();
+        self.reset_selection();
+        true
+    }
 
-        self.reset_selection()
+    pub fn play_remote_move(
+        &mut self,
+        board_row: usize,
+        board_col: usize,
+        cell_row: usize,
+        cell_col: usize,
+    ) -> bool {
+        let GameMode::OnlinePvP(local_mark) = self.mode else {
+            return false;
+        };
+        if self.big_board.state != GameState::Playing
+            || self.active_player == local_mark
+            || board_row >= 3
+            || board_col >= 3
+            || cell_row >= 3
+            || cell_col >= 3
+            || self
+                .big_board
+                .active_board
+                .is_some_and(|active_board| active_board != (board_row, board_col))
+            || !self
+                .big_board
+                .get_board(board_row, board_col)
+                .is_playable(cell_row, cell_col)
+        {
+            return false;
+        }
+
+        self.apply_move(board_row, board_col, cell_row, cell_col);
+        self.reset_selection();
+        true
+    }
+
+    fn apply_move(&mut self, board_row: usize, board_col: usize, cell_row: usize, cell_col: usize) {
+        self.big_board
+            .make_move(board_row, board_col, cell_row, cell_col, self.active_player);
+        self.turn += 1;
+        self.active_player = self.active_player.switch();
     }
 
     fn reset_selection(&mut self) {
@@ -770,6 +807,38 @@ mod tests {
         assert_eq!(game.turn, 1);
         assert_eq!(game.active_player, Mark::O);
         assert_eq!(game.board.get(0, 0), Some(Mark::X));
+    }
+
+    #[test]
+    fn test_online_ultimate_player_can_move_only_on_their_turn() {
+        let mut game = GamePlayUTT::new(GameMode::OnlinePvP(Mark::X));
+        game.selected_cell = Some(Position { row: 1, col: 2 });
+
+        assert!(game.play_move());
+        assert_eq!(game.big_board.get_board(0, 0).get(1, 2), Some(Mark::X));
+        assert_eq!(game.big_board.active_board, Some((1, 2)));
+        assert_eq!(game.active_player, Mark::O);
+        assert_eq!(game.turn, 1);
+        assert!(!game.play_move());
+    }
+
+    #[test]
+    fn test_online_ultimate_remote_move_must_be_valid_and_on_opponents_turn() {
+        let mut game = GamePlayUTT::new(GameMode::OnlinePvP(Mark::O));
+
+        assert!(game.play_remote_move(0, 0, 1, 2));
+        assert_eq!(game.big_board.get_board(0, 0).get(1, 2), Some(Mark::X));
+        assert_eq!(game.big_board.active_board, Some((1, 2)));
+        assert_eq!(game.active_player, Mark::O);
+        assert!(!game.play_remote_move(1, 2, 0, 0));
+
+        game.selected_cell = Some(Position { row: 0, col: 0 });
+        assert!(game.play_move());
+        assert_eq!(game.big_board.active_board, Some((0, 0)));
+        assert!(!game.play_remote_move(1, 2, 0, 1));
+        assert!(!game.play_remote_move(0, 0, 1, 2));
+        assert!(!game.play_remote_move(3, 0, 0, 0));
+        assert_eq!(game.turn, 2);
     }
 
     #[test]
