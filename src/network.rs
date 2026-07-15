@@ -17,7 +17,8 @@ pub enum NetworkCommand {
     Host,
     Join(String),
     SendMove(MoveMessage),
-    StartNewRound { starting_mark: Mark },
+    SendRematchReady,
+    YieldFirstMove,
     Disconnect,
 }
 
@@ -27,7 +28,8 @@ pub enum NetworkEvent {
     Connecting,
     Connected { mark: Mark },
     MoveReceived(MoveMessage),
-    NewRoundReceived { starting_mark: Mark },
+    RematchReadyReceived,
+    YieldFirstMoveReceived,
     OpponentDisconnected,
     Disconnected,
     Failed(String),
@@ -61,7 +63,9 @@ impl NetworkEvent {
             }),
             NetworkEvent::Connecting => Some(NetworkStatus::Connecting),
             NetworkEvent::Connected { mark } => Some(NetworkStatus::Connected { mark }),
-            NetworkEvent::MoveReceived(_) | NetworkEvent::NewRoundReceived { .. } => None,
+            NetworkEvent::MoveReceived(_)
+            | NetworkEvent::RematchReadyReceived
+            | NetworkEvent::YieldFirstMoveReceived => None,
             NetworkEvent::OpponentDisconnected => Some(NetworkStatus::OpponentDisconnected),
             NetworkEvent::Disconnected => Some(NetworkStatus::Idle),
             NetworkEvent::Failed(error) => Some(NetworkStatus::Failed(error)),
@@ -191,11 +195,19 @@ async fn run_network_worker(
                         )
                         .await;
                     }
-                    NetworkCommand::StartNewRound { starting_mark } => {
+                    NetworkCommand::SendRematchReady => {
                         send_worker_game_message(
                             &mut session,
                             &event_tx,
-                            GameMessage::NewRound { starting_mark },
+                            GameMessage::RematchReady,
+                        )
+                        .await;
+                    }
+                    NetworkCommand::YieldFirstMove => {
+                        send_worker_game_message(
+                            &mut session,
+                            &event_tx,
+                            GameMessage::YieldFirstMove,
                         )
                         .await;
                     }
@@ -231,7 +243,8 @@ async fn run_network_worker(
                                 let _ = event_tx.send(NetworkEvent::Disconnected);
                             }
                             NetworkCommand::SendMove(_)
-                            | NetworkCommand::StartNewRound { .. } => unreachable!(),
+                            | NetworkCommand::SendRematchReady
+                            | NetworkCommand::YieldFirstMove => unreachable!(),
                         }
                     }
                 }
@@ -258,8 +271,11 @@ async fn run_network_worker(
                     Ok(GameMessage::Move { position }) => {
                         let _ = event_tx.send(NetworkEvent::MoveReceived(position));
                     }
-                    Ok(GameMessage::NewRound { starting_mark }) => {
-                        let _ = event_tx.send(NetworkEvent::NewRoundReceived { starting_mark });
+                    Ok(GameMessage::RematchReady) => {
+                        let _ = event_tx.send(NetworkEvent::RematchReadyReceived);
+                    }
+                    Ok(GameMessage::YieldFirstMove) => {
+                        let _ = event_tx.send(NetworkEvent::YieldFirstMoveReceived);
                     }
                     Err(ReceiveGameMessageError::Disconnected(_)) => {
                         if let Some(session) = session.take() {
@@ -491,9 +507,7 @@ mod tests {
             async { wait_for_connection(&host_endpoint).await.unwrap() },
             async { connect_to_host(&joiner_endpoint, host_addr).await.unwrap() }
         );
-        let message = GameMessage::NewRound {
-            starting_mark: Mark::O,
-        };
+        let message = GameMessage::RematchReady;
 
         let (sent, received) = tokio::join!(
             send_game_message(&joiner_connection, &message),
@@ -622,11 +636,22 @@ mod tests {
 
         assert_eq!(wait_for_received_move(&host), message);
 
-        host.send(NetworkCommand::StartNewRound {
-            starting_mark: Mark::X,
-        })
-        .unwrap();
-        assert_eq!(wait_for_new_round(&joiner), Mark::X);
+        host.send(NetworkCommand::YieldFirstMove).unwrap();
+        assert_eq!(
+            joiner
+                .event_rx
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .unwrap(),
+            NetworkEvent::YieldFirstMoveReceived
+        );
+
+        joiner.send(NetworkCommand::SendRematchReady).unwrap();
+        assert_eq!(
+            host.event_rx
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .unwrap(),
+            NetworkEvent::RematchReadyReceived
+        );
 
         host.send(NetworkCommand::Disconnect).unwrap();
         assert_eq!(
@@ -668,20 +693,6 @@ mod tests {
                 NetworkEvent::MoveReceived(message) => return message,
                 NetworkEvent::Hosting { .. } => {}
                 event => panic!("expected move event, got {event:?}"),
-            }
-        }
-    }
-
-    fn wait_for_new_round(client: &NetworkClient) -> Mark {
-        loop {
-            match client
-                .event_rx
-                .recv_timeout(std::time::Duration::from_secs(5))
-                .unwrap()
-            {
-                NetworkEvent::NewRoundReceived { starting_mark } => return starting_mark,
-                NetworkEvent::Hosting { .. } => {}
-                event => panic!("expected new-round event, got {event:?}"),
             }
         }
     }

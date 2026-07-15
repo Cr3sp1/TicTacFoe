@@ -504,6 +504,11 @@ fn render_ttt_instructions(
         && matches!(network_status, NetworkStatus::OpponentDisconnected)
     {
         vec!["M: Main Menu | Q: Quit".to_string()]
+    } else if matches!(game.mode, GameMode::OnlinePvP(_)) && game.waiting_for_rematch() {
+        vec![
+            "Waiting for opponent".to_string(),
+            "M: Main Menu | Q: Quit".to_string(),
+        ]
     } else if game.board.state == GameState::Playing {
         match game.mode {
             GameMode::OnlinePvP(local_mark) if local_mark != game.active_player => vec![

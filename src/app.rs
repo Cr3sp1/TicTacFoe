@@ -105,14 +105,24 @@ impl App {
                         NetworkStatus::Failed("received an invalid online move".to_string());
                 }
             }
-            NetworkEvent::NewRoundReceived { starting_mark } => {
+            NetworkEvent::RematchReadyReceived => {
                 let applied = match &mut self.current_scene {
-                    Scene::PlayingTTT(game) => game.apply_remote_new_round(starting_mark),
+                    Scene::PlayingTTT(game) => game.receive_remote_rematch_ready(),
                     _ => false,
                 };
                 if !applied {
                     self.network_status =
-                        NetworkStatus::Failed("received an invalid new round".to_string());
+                        NetworkStatus::Failed("received invalid rematch readiness".to_string());
+                }
+            }
+            NetworkEvent::YieldFirstMoveReceived => {
+                let applied = match &mut self.current_scene {
+                    Scene::PlayingTTT(game) => game.apply_remote_yield_first_move(),
+                    _ => false,
+                };
+                if !applied {
+                    self.network_status =
+                        NetworkStatus::Failed("received an invalid first-move yield".to_string());
                 }
             }
             event => {
@@ -123,10 +133,8 @@ impl App {
         }
     }
 
-    fn send_online_new_round(&mut self, starting_mark: Mark) {
-        if let Err(error) =
-            self.send_active_network_command(NetworkCommand::StartNewRound { starting_mark })
-        {
+    fn send_online_action(&mut self, command: NetworkCommand) {
+        if let Err(error) = self.send_active_network_command(command) {
             self.network_status = NetworkStatus::Failed(error.to_string());
         }
     }
@@ -481,54 +489,50 @@ impl App {
     /// Handles 's' key input to allow AI to play first in PvE mode.
     pub fn handle_second(&mut self) {
         let online_connected = matches!(self.network_status, NetworkStatus::Connected { .. });
-        let starting_mark = match &mut self.current_scene {
+        let yielded = match &mut self.current_scene {
             Scene::PlayingTTT(game)
-                if matches!(game.mode, GameMode::OnlinePvP(_)) && !online_connected =>
+                if matches!(game.mode, GameMode::OnlinePvP(_)) && online_connected =>
             {
-                None
-            }
-            Scene::PlayingTTT(game) if matches!(game.mode, GameMode::OnlinePvP(_)) => {
                 game.yield_online_first_move()
             }
+            Scene::PlayingTTT(game) if matches!(game.mode, GameMode::OnlinePvP(_)) => false,
             Scene::PlayingTTT(game) => {
                 game.play_second();
-                None
+                false
             }
             Scene::PlayingUTT(game) => {
                 game.play_second();
-                None
+                false
             }
-            _ => None,
+            _ => false,
         };
-        if let Some(starting_mark) = starting_mark {
-            self.send_online_new_round(starting_mark);
+        if yielded {
+            self.send_online_action(NetworkCommand::YieldFirstMove);
         }
     }
 
     /// Handles 'r' key input to reset the current game.
     pub fn handle_reset(&mut self) {
         let online_connected = matches!(self.network_status, NetworkStatus::Connected { .. });
-        let starting_mark = match &mut self.current_scene {
+        let requested = match &mut self.current_scene {
             Scene::PlayingTTT(game)
-                if matches!(game.mode, GameMode::OnlinePvP(_)) && !online_connected =>
+                if matches!(game.mode, GameMode::OnlinePvP(_)) && online_connected =>
             {
-                None
+                game.request_online_rematch()
             }
-            Scene::PlayingTTT(game) if matches!(game.mode, GameMode::OnlinePvP(_)) => {
-                game.request_online_reset()
-            }
+            Scene::PlayingTTT(game) if matches!(game.mode, GameMode::OnlinePvP(_)) => false,
             Scene::PlayingTTT(game) => {
                 game.reset_game();
-                None
+                false
             }
             Scene::PlayingUTT(game) => {
                 game.reset_game();
-                None
+                false
             }
-            _ => None,
+            _ => false,
         };
-        if let Some(starting_mark) = starting_mark {
-            self.send_online_new_round(starting_mark);
+        if requested {
+            self.send_online_action(NetworkCommand::SendRematchReady);
         }
     }
 
@@ -635,7 +639,7 @@ mod tests {
         let mut app = App::new();
         app.handle_network_event(NetworkEvent::Connected { mark: O });
 
-        app.handle_network_event(NetworkEvent::NewRoundReceived { starting_mark: O });
+        app.handle_network_event(NetworkEvent::YieldFirstMoveReceived);
 
         let Scene::PlayingTTT(game) = &app.current_scene else {
             panic!("expected online tic tac toe game");
@@ -645,7 +649,7 @@ mod tests {
     }
 
     #[test]
-    fn test_received_reset_starts_with_remote_player() {
+    fn test_received_rematch_readiness_completes_two_party_rematch() {
         let mut app = App::new();
         app.handle_network_event(NetworkEvent::Connected { mark: X });
         let Scene::PlayingTTT(game) = &mut app.current_scene else {
@@ -653,8 +657,9 @@ mod tests {
         };
         game.board.state = GameState::Won(X);
         game.turn = 5;
+        assert!(game.request_online_rematch());
 
-        app.handle_network_event(NetworkEvent::NewRoundReceived { starting_mark: O });
+        app.handle_network_event(NetworkEvent::RematchReadyReceived);
 
         let Scene::PlayingTTT(game) = &app.current_scene else {
             panic!("expected online tic tac toe game");

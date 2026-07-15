@@ -97,7 +97,8 @@ impl std::error::Error for InvalidMoveCoordinates {}
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum GameMessage {
     Move { position: MoveMessage },
-    NewRound { starting_mark: Mark },
+    RematchReady,
+    YieldFirstMove,
 }
 
 pub fn encode_game_message(message: &GameMessage) -> Result<Vec<u8>, serde_json::Error> {
@@ -151,15 +152,13 @@ mod tests {
     }
 
     #[test]
-    fn new_round_round_trips_with_starting_mark() {
-        let message = GameMessage::NewRound {
-            starting_mark: Mark::O,
-        };
+    fn rematch_and_yield_messages_round_trip() {
+        for message in [GameMessage::RematchReady, GameMessage::YieldFirstMove] {
+            let encoded = encode_game_message(&message).unwrap();
+            let decoded = decode_game_message(&encoded).unwrap();
 
-        let encoded = encode_game_message(&message).unwrap();
-        let decoded = decode_game_message(&encoded).unwrap();
-
-        assert_eq!(decoded, message);
+            assert_eq!(decoded, message);
+        }
     }
 
     #[test]
